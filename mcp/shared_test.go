@@ -11,7 +11,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
+	"github.com/Tangerg/go-sdk/jsonrpc"
 )
 
 func TestValidateRequestMeta(t *testing.T) {
@@ -634,7 +634,7 @@ func TestImplementationDescriptionJSON(t *testing.T) {
 // }
 
 // TestUnmarshalParamsInvalidParamsCode is a regression test for
-// https://github.com/modelcontextprotocol/go-sdk/issues/976#issuecomment-4829124838.
+// https://github.com/Tangerg/go-sdk/issues/976#issuecomment-4829124838.
 // Malformed params for a registered method must surface as a JSON-RPC error
 // whose code is CodeInvalidParams (-32602) rather than the zero-value 0.
 func TestUnmarshalParamsInvalidParamsCode(t *testing.T) {

@@ -30,23 +30,23 @@ to clients. Every prompt has a required name which identifies it, and a set of
 named arguments, which are strings.
 
 **Client-side**: To list the server's prompts, use the 
-[`ClientSession.Prompts`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientSession.Prompts)
+[`ClientSession.Prompts`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientSession.Prompts)
 iterator, or the lower-level
-[`ClientSession.ListPrompts`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientSession.ListPrompts)
+[`ClientSession.ListPrompts`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientSession.ListPrompts)
 (see [pagination](#pagination) below). Set
-[`ClientOptions.PromptListChangedHandler`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientOptions.PromptListChangedHandler)
+[`ClientOptions.PromptListChangedHandler`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientOptions.PromptListChangedHandler)
 to be notified of changes in the list of prompts.
 
 Call
-[`ClientSession.GetPrompt`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientSession.GetPrompt)
+[`ClientSession.GetPrompt`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientSession.GetPrompt)
 to retrieve a prompt by name, providing arguments for expansion. 
 
 **Server-side**: Use
-[`Server.AddPrompt`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#Server.AddPrompt)
+[`Server.AddPrompt`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#Server.AddPrompt)
 to add a prompt to the server along with its handler.
 The server will have the `prompts` capability if any prompt is added before the
 server is connected to a client, or if
-[`ServerOptions.HasPrompts`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerOptions.HasPrompts)
+[`ServerOptions.HasPrompts`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ServerOptions.HasPrompts)
 is explicitly set. When a prompt is added, any clients already connected to the
 server will be notified via a `notifications/prompts/list_changed`
 notification.
@@ -123,7 +123,7 @@ func Example_prompts() {
 ### Prompt message content
 
 A
-[`PromptMessage`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#PromptMessage)
+[`PromptMessage`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#PromptMessage)
 has two fields: a `Role`, either `"user"` or `"assistant"`, and a single
 `Content`. That is the same interface a tool result uses (see [Tool result
 content](#tool-result-content)), so a prompt message can hold an image, audio,
@@ -214,29 +214,29 @@ that uses a URI pattern to describe a collection of resources.
 
 
 **Client-side**:
-Call [`ClientSession.ReadResource`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientSession.ReadResource)
+Call [`ClientSession.ReadResource`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientSession.ReadResource)
 to read a resource.
 The SDK ensures that a read succeeds only if the URI matches a registered resource exactly,
 or matches the URI pattern of a resource template.
 
 To list a server's resources and resource templates, use the 
-[`ClientSession.Resources`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientSession.Resources)
+[`ClientSession.Resources`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientSession.Resources)
 and
-[`ClientSession.ResourceTemplates`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientSession.ResourceTemplates)
+[`ClientSession.ResourceTemplates`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientSession.ResourceTemplates)
 iterators, or the lower-level `ListXXX` calls (see [pagination](#pagination)).
 Set
-[`ClientOptions.ResourceListChangedHandler`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientOptions.ResourceListChangedHandler)
+[`ClientOptions.ResourceListChangedHandler`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientOptions.ResourceListChangedHandler)
 to be notified of changes in the lists of resources or resource templates.
 
 Clients can be notified when the contents of a resource changes by subscribing to the resource's URI.
 Call
-[`ClientSession.Subscribe`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientSession.Subscribe)
+[`ClientSession.Subscribe`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientSession.Subscribe)
 to subscribe to a resource
 and
-[`ClientSession.Unsubscribe`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientSession.Unsubscribe)
+[`ClientSession.Unsubscribe`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientSession.Unsubscribe)
 to unsubscribe.
 Set
-[`ClientOptions.ResourceUpdatedHandler`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientOptions.ResourceUpdatedHandler)
+[`ClientOptions.ResourceUpdatedHandler`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientOptions.ResourceUpdatedHandler)
 to be notified of changes to subscribed resources. On `2026-07-28` and
 later sessions the SDK delivers these notifications over a
 `subscriptions/listen` stream instead of the legacy `resources/subscribe`
@@ -246,19 +246,19 @@ for the wire-level details.
 
 **Server-side**:
 Use
-[`Server.AddResource`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#Server.AddResource)
+[`Server.AddResource`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#Server.AddResource)
 or
-[`Server.AddResourceTemplate`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#Server.AddResourceTemplate)
+[`Server.AddResourceTemplate`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#Server.AddResourceTemplate)
 to add a resource or resource template to the server along with its handler.
 A
-[`ResourceHandler`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ResourceHandler)
+[`ResourceHandler`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ResourceHandler)
 maps a URI to the contents of a resource, which can include text, binary data,
 or both. 
 If `AddResource` or `AddResourceTemplate` is called before a server is connected, the server will have the
 `resources` capability.
 The server will have the `resources` capability if any resource or resource template is added before the
 server is connected to a client, or if
-[`ServerOptions.HasResources`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerOptions.HasResources)
+[`ServerOptions.HasResources`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ServerOptions.HasResources)
 is explicitly set. When a prompt is added, any clients already connected to the
 server will be notified via a `notifications/resources/list_changed`
 notification.
@@ -339,7 +339,7 @@ func Example_resources() {
 ### Binary resources
 
 A
-[`ResourceContents`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ResourceContents)
+[`ResourceContents`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ResourceContents)
 carries its data in either `Text` or `Blob`. Binary data goes in `Blob` as
 plain bytes — the SDK base64-encodes it on the wire — and leaves `Text` empty,
 so a client tells the two apart by which field is populated.
@@ -387,18 +387,18 @@ func Example_binaryResource() {
 ### Resource subscriptions
 
 A client interested in changes to one resource subscribes to its URI with
-[`ClientSession.Subscribe`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientSession.Subscribe)
+[`ClientSession.Subscribe`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientSession.Subscribe)
 and stops with
-[`ClientSession.Unsubscribe`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientSession.Unsubscribe).
+[`ClientSession.Unsubscribe`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientSession.Unsubscribe).
 Set
-[`ServerOptions.SubscribeHandler`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerOptions.SubscribeHandler)
+[`ServerOptions.SubscribeHandler`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ServerOptions.SubscribeHandler)
 and
-[`UnsubscribeHandler`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerOptions.UnsubscribeHandler)
+[`UnsubscribeHandler`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ServerOptions.UnsubscribeHandler)
 to track who is listening; setting either one gives the server the
 `resources.subscribe` capability.
 
 Publish a change with
-[`Server.ResourceUpdated`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#Server.ResourceUpdated),
+[`Server.ResourceUpdated`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#Server.ResourceUpdated),
 which notifies every session subscribed to that URI. The notification carries
 only the URI, not the new contents, so a client that wants them reads the
 resource again.
@@ -484,15 +484,15 @@ effectively remote function calls, and the Go SDK provides mechanisms to bind
 them to ordinary Go functions.
 
 **Client-side**: To list the server's tools, use the
-[`ClientSession.Tools`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientSession.Tools)
+[`ClientSession.Tools`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientSession.Tools)
 iterator, or the lower-level
-[`ClientSession.ListTools`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientSession.ListTools)
+[`ClientSession.ListTools`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientSession.ListTools)
 (see [pagination](#pagination)). Set
-[`ClientOptions.ToolListChangedHandler`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientOptions.ToolListChangedHandler)
+[`ClientOptions.ToolListChangedHandler`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientOptions.ToolListChangedHandler)
 to be notified of changes in the list of tools.
 
 To call a tool, use
-[`ClientSession.CallTool`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientSession.CallTool)
+[`ClientSession.CallTool`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientSession.CallTool)
 with `CallToolParams` holding the name and arguments of the tool to call.
 
 ```go
@@ -506,14 +506,14 @@ Arguments may be any value that can be marshaled to JSON.
 
 **Server-side**: the basic API for adding a tool is symmetrical with the API
 for prompts or resources:
-[`Server.AddTool`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#Server.AddTool)
+[`Server.AddTool`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#Server.AddTool)
 adds a
-[`Tool`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#Tool) to
+[`Tool`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#Tool) to
 the server along with its
-[`ToolHandler`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ToolHandler)
+[`ToolHandler`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ToolHandler)
 to handle it. The server will have the `tools` capability if any tool is added
 before the server is connected to a client, or if
-[`ServerOptions.HasTools`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerOptions.HasPrompts)
+[`ServerOptions.HasTools`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ServerOptions.HasPrompts)
 is explicitly set. When a tool is added, any clients already connected to the
 server will be notified via a `notifications/tools/list_changed` notification.
 
@@ -532,7 +532,7 @@ In order to implement a tool, the user must do all of the following:
   `IsError` to `true.`
 
 For this reason, the SDK provides a generic
-[`AddTool`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#AddTool)
+[`AddTool`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#AddTool)
 function that handles this for you. It can bind a tool to any function with the
 following shape:
 
@@ -642,29 +642,29 @@ mcp.AddTool(server, &mcp.Tool{
 }, WeatherTool)
 ```
 
-_See [mcp/tool_example_test.go](https://github.com/modelcontextprotocol/go-sdk/blob/main/mcp/tool_example_test.go) for the full
-example, or [examples/server/toolschemas](https://github.com/modelcontextprotocol/go-sdk/blob/main/examples/server/toolschemas/main.go)
+_See [mcp/tool_example_test.go](https://github.com/Tangerg/go-sdk/blob/main/mcp/tool_example_test.go) for the full
+example, or [examples/server/toolschemas](https://github.com/Tangerg/go-sdk/blob/main/examples/server/toolschemas/main.go)
 for more examples of customizing tool schemas._
 
 ### Tool result content
 
 Alongside its structured output, a tool result carries a list of
-[`Content`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#Content)
+[`Content`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#Content)
 blocks in `CallToolResult.Content`, and may mix as many kinds as it needs:
 
 | Type | Carries |
 | --- | --- |
-| [`TextContent`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#TextContent) | plain text |
-| [`ImageContent`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ImageContent) | image data, with a MIME type |
-| [`AudioContent`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#AudioContent) | audio data, with a MIME type |
-| [`EmbeddedResource`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#EmbeddedResource) | the contents of a resource, inline |
-| [`ResourceLink`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ResourceLink) | a reference to a resource the client can read separately |
+| [`TextContent`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#TextContent) | plain text |
+| [`ImageContent`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ImageContent) | image data, with a MIME type |
+| [`AudioContent`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#AudioContent) | audio data, with a MIME type |
+| [`EmbeddedResource`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#EmbeddedResource) | the contents of a resource, inline |
+| [`ResourceLink`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ResourceLink) | a reference to a resource the client can read separately |
 
 `ImageContent.Data` and `AudioContent.Data` are plain `[]byte`; the SDK
 base64-encodes them on the wire, so handlers never encode by hand, and base64
 carried over from another MCP SDK must be decoded before it is assigned. An
 `EmbeddedResource` wraps a
-[`ResourceContents`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ResourceContents),
+[`ResourceContents`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ResourceContents),
 which holds either `Text` or, for binary data, `Blob`. Prefer a `ResourceLink`
 when the client may not need the contents, since an embedded resource is
 transferred whether it is used or not.
@@ -744,10 +744,10 @@ func ExampleAddTool_contentTypes() {
 valid in sampling messages, not in tool results.
 
 **Stateless server deployments:** Some deployments create a new
-[`Server`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#Server)
+[`Server`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#Server)
 for each incoming request, re-registering tools every time. To avoid repeated
 schema generation, create a
-[`SchemaCache`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#SchemaCache)
+[`SchemaCache`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#SchemaCache)
 and share it across server instances:
 
 ```go
@@ -764,15 +764,15 @@ func handleRequest(w http.ResponseWriter, r *http.Request) {
 
 Adding or removing a feature on a connected server sends the matching
 `notifications/*/list_changed` to every client, which dispatches it to
-[`ClientOptions.ToolListChangedHandler`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientOptions.ToolListChangedHandler),
-[`PromptListChangedHandler`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientOptions.PromptListChangedHandler),
+[`ClientOptions.ToolListChangedHandler`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientOptions.ToolListChangedHandler),
+[`PromptListChangedHandler`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientOptions.PromptListChangedHandler),
 or
-[`ResourceListChangedHandler`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientOptions.ResourceListChangedHandler).
+[`ResourceListChangedHandler`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientOptions.ResourceListChangedHandler).
 A notification reports only that the list changed, so a client that needs the
 new contents lists them again.
 
 These notifications ride on capabilities, and capabilities are inferred from
-what is registered before [`Server.Connect`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#Server.Connect)
+what is registered before [`Server.Connect`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#Server.Connect)
 (see [Capabilities](#capabilities)). A server that registers its features
 afterwards, as the example below does, has to declare
 `ServerOptions.HasTools`, `HasPrompts`, or `HasResources` itself, or the
@@ -1011,11 +1011,11 @@ To support the
 capability, the server needs a completion handler.
 
 **Client-side**: completion is called using the
-[`ClientSession.Complete`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientSession.Complete)
+[`ClientSession.Complete`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientSession.Complete)
 method.
 
 **Server-side**: completion is enabled by setting
-[`ServerOptions.CompletionHandler`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerOptions.CompletionHandler).
+[`ServerOptions.CompletionHandler`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ServerOptions.CompletionHandler).
 If this field is set to a non-nil value, the server will advertise the
 `completions` server capability, and use this handler to respond to completion
 requests.
@@ -1073,21 +1073,21 @@ carries its level in `_meta` (`io.modelcontextprotocol/logLevel`), and nothing i
 logged until the client sends one.
 (Note: logging is deprecated as of 2026-07-28 / SEP-2577.)
 
-[`ServerSession.Log`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerSession.Log) is the low-level way for servers to log to clients.
+[`ServerSession.Log`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ServerSession.Log) is the low-level way for servers to log to clients.
 It sends a logging notification to the client if the level of the message
 is at least the minimum log level.
 
-For a simpler API, use [`NewLoggingHandler`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#NewLoggingHandler) to obtain a [`slog.Handler`](https://pkg.go.dev/log/slog#Handler).
-By setting [`LoggingHandlerOptions.MinInterval`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#LoggingHandlerOptions.MinInterval), the handler can be rate-limited
+For a simpler API, use [`NewLoggingHandler`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#NewLoggingHandler) to obtain a [`slog.Handler`](https://pkg.go.dev/log/slog#Handler).
+By setting [`LoggingHandlerOptions.MinInterval`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#LoggingHandlerOptions.MinInterval), the handler can be rate-limited
 to avoid spamming clients with too many messages.
 
 Servers always report the logging capability.
 
 
 **Client-side**:
-Set [`ClientOptions.LoggingMessageHandler`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientOptions.LoggingMessageHandler) to receive log messages.
+Set [`ClientOptions.LoggingMessageHandler`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientOptions.LoggingMessageHandler) to receive log messages.
 
-Call [`ClientSession.SetLoggingLevel`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientSession.SetLoggingLevel) to change the log level for a session.
+Call [`ClientSession.SetLoggingLevel`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientSession.SetLoggingLevel) to change the log level for a session.
 
 ```go
 func Example_logging() {
@@ -1167,7 +1167,7 @@ the corresponding capability is added.
 
 To explicitly declare capabilities, or to override the [default inferred
 capability](#capability-inference), set
-[`ServerOptions.Capabilities`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerOptions.Capabilities).
+[`ServerOptions.Capabilities`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ServerOptions.Capabilities).
 This sets the default server capabilities, before any capabilities are added
 based on configured handlers. If a capability is already present as a field in
 `Capabilities`, adding a feature or handler will not change its configuration.
@@ -1214,13 +1214,13 @@ using cursors. The SDK supports this by default.
 These iterators are an `iter.Seq2[Feature, error]`, where the error value
 indicates whether page retrieval failed.
 
-- [`ClientSession.Prompts`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientSession.Prompts)
+- [`ClientSession.Prompts`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientSession.Prompts)
   iterates prompts.
-- [`ClientSession.Resource`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientSession.Resource)
+- [`ClientSession.Resource`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientSession.Resource)
   iterates resources.
-- [`ClientSession.ResourceTemplates`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientSession.ResourceTemplates)
+- [`ClientSession.ResourceTemplates`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientSession.ResourceTemplates)
   iterates resource templates.
-- [`ClientSession.Tools`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientSession.Tools)
+- [`ClientSession.Tools`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientSession.Tools)
   iterates tools.
 
 The `ClientSession` also exposes `ListXXX` methods for fine-grained control
@@ -1228,5 +1228,5 @@ over pagination.
 
 **Server-side**: pagination is on by default, so in general nothing is required
 server-side. However, you may use
-[`ServerOptions.PageSize`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerOptions.PageSize)
+[`ServerOptions.PageSize`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ServerOptions.PageSize)
 to customize the page size.

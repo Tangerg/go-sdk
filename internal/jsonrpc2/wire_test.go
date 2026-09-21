@@ -11,7 +11,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/internal/jsonrpc2"
+	"github.com/Tangerg/go-sdk/internal/jsonrpc2"
 )
 
 func TestWireMessage(t *testing.T) {

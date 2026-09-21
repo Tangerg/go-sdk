@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"maps"
 
-	internaljson "github.com/modelcontextprotocol/go-sdk/internal/json"
-	"github.com/modelcontextprotocol/go-sdk/internal/mcpgodebug"
+	internaljson "github.com/Tangerg/go-sdk/internal/json"
+	"github.com/Tangerg/go-sdk/internal/mcpgodebug"
 )
 
 // resultType indicates whether a result is complete or requires further input
@@ -381,12 +381,6 @@ func (r *CallToolResult) hasContent() bool {
 // An empty InputRequests with NeedsInput true indicates load-shedding.
 func (r *CallToolResult) NeedsInput() bool { return r.resultType == resultTypeInputRequired }
 
-// structuredcontentfloat64 is a compatibility parameter that restores the
-// previous behavior of decoding numbers in [CallToolResult.StructuredContent]
-// as float64 values. By default, numbers are decoded as [json.Number] to avoid
-// losing precision. The option will be removed in the 1.11.0 version of the SDK.
-var structuredcontentfloat64 = mcpgodebug.Value("structuredcontentfloat64")
-
 func (x *CallToolResult) MarshalJSON() ([]byte, error) {
 	type res CallToolResult // avoid recursion
 	type wire struct {
@@ -417,11 +411,7 @@ func (x *CallToolResult) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	if len(wire.StructuredContent) > 0 {
-		unmarshal := internaljson.UnmarshalUseNumber
-		if structuredcontentfloat64 == "1" {
-			unmarshal = internaljson.Unmarshal
-		}
-		if err := unmarshal(wire.StructuredContent, &wire.res.StructuredContent); err != nil {
+		if err := internaljson.UnmarshalUseNumber(wire.StructuredContent, &wire.res.StructuredContent); err != nil {
 			return err
 		}
 		// A present JSON null is distinct from an omitted structured result.

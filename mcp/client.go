@@ -19,9 +19,9 @@ import (
 	"time"
 
 	"github.com/google/jsonschema-go/jsonschema"
-	"github.com/modelcontextprotocol/go-sdk/internal/json"
-	"github.com/modelcontextprotocol/go-sdk/internal/jsonrpc2"
-	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
+	"github.com/Tangerg/go-sdk/internal/json"
+	"github.com/Tangerg/go-sdk/internal/jsonrpc2"
+	"github.com/Tangerg/go-sdk/jsonrpc"
 )
 
 // A Client is an MCP client, which may be connected to an MCP server

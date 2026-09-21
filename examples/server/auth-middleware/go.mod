@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
-	github.com/modelcontextprotocol/go-sdk v0.3.0
+	github.com/Tangerg/go-sdk v0.3.0
 )
 
 require (
@@ -13,4 +13,4 @@ require (
 	golang.org/x/oauth2 v0.35.0 // indirect
 )
 
-replace github.com/modelcontextprotocol/go-sdk => ../../../
+replace github.com/Tangerg/go-sdk => ../../../

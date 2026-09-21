@@ -4,12 +4,12 @@
 
 The following items are planned for the next release (v1.4.0):
 
-- **SEP-1730: Tier 1 SDK support** (https://github.com/modelcontextprotocol/go-sdk/issues/675)
+- **SEP-1730: Tier 1 SDK support** (https://github.com/Tangerg/go-sdk/issues/675)
   - Description: We aim to be rated as Tier 1 SDK.
-- **SEP-1577: support Sampling With Tools** (https://github.com/modelcontextprotocol/go-sdk/issues/629)
+- **SEP-1577: support Sampling With Tools** (https://github.com/Tangerg/go-sdk/issues/629)
   - Description: Sampling with Tools is the last SEP to be implemented
     to implement the full scope of 2025-11-25 MCP specification.
-- **OAuth Support** (https://github.com/modelcontextprotocol/go-sdk/issues/19)
+- **OAuth Support** (https://github.com/Tangerg/go-sdk/issues/19)
   - Description: Client-side OAuth support is the last feature
     needed to provide the Authorization solution as per specification.
 
@@ -21,12 +21,12 @@ to the MCP specification listed in the next section.
 
 ## Experimental features
 
-- **SEP-1686 (experimental): Implement Tasks** (https://github.com/modelcontextprotocol/go-sdk/issues/626)
+- **SEP-1686 (experimental): Implement Tasks** (https://github.com/Tangerg/go-sdk/issues/626)
 
 ## Extensions
 
 ### Authorization extensions (https://github.com/modelcontextprotocol/ext-auth)
 
-- **ext-auth: Enterprise Managed Authorization** (https://github.com/modelcontextprotocol/go-sdk/issues/628)
-  - Status: In progress - https://github.com/modelcontextprotocol/go-sdk/pull/770
-- **ext-auth: OAuth Client Credentials** (https://github.com/modelcontextprotocol/go-sdk/issues/627)
+- **ext-auth: Enterprise Managed Authorization** (https://github.com/Tangerg/go-sdk/issues/628)
+  - Status: In progress - https://github.com/Tangerg/go-sdk/pull/770
+- **ext-auth: OAuth Client Credentials** (https://github.com/Tangerg/go-sdk/issues/627)

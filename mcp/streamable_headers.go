@@ -16,8 +16,8 @@ import (
 	"strconv"
 	"strings"
 
-	internaljson "github.com/modelcontextprotocol/go-sdk/internal/json"
-	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
+	internaljson "github.com/Tangerg/go-sdk/internal/json"
+	"github.com/Tangerg/go-sdk/jsonrpc"
 )
 
 const (

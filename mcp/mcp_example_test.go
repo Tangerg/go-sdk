@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/Tangerg/go-sdk/mcp"
 )
 
 // !+lifecycle

@@ -1,6 +1,6 @@
 # Go SDK Design
 
-This document discusses the design of a Go SDK for the [model context protocol](https://modelcontextprotocol.io/specification/2025-03-26). The [github.com/modelcontextprotocol/go-sdk/mcp](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp@master) package contains a prototype that we built to explore the MCP design space. Many of the ideas there are present in this document. However, we have diverged from and expanded on the APIs of that prototype, and this document should be considered canonical.
+This document discusses the design of a Go SDK for the [model context protocol](https://modelcontextprotocol.io/specification/2025-03-26). The [github.com/Tangerg/go-sdk/mcp](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp@master) package contains a prototype that we built to explore the MCP design space. Many of the ideas there are present in this document. However, we have diverged from and expanded on the APIs of that prototype, and this document should be considered canonical.
 
 ## Similarities and differences with mark3labs/mcp-go (and others)
 
@@ -32,11 +32,11 @@ In the sections that follow, it is assumed that most of the MCP API lives in a s
 
 Functionality that is not directly related to MCP (like jsonschema or jsonrpc2) belongs in a separate package.
 
-Therefore, this is the core package layout, assuming github.com/modelcontextprotocol/go-sdk as the module path.
+Therefore, this is the core package layout, assuming github.com/Tangerg/go-sdk as the module path.
 
-- `github.com/modelcontextprotocol/go-sdk/mcp`: the bulk of the user facing API
-- `github.com/modelcontextprotocol/go-sdk/jsonschema`: a jsonschema implementation, with validation
-- `github.com/modelcontextprotocol/go-sdk/internal/jsonrpc2`: a fork of x/tools/internal/jsonrpc2_v2
+- `github.com/Tangerg/go-sdk/mcp`: the bulk of the user facing API
+- `github.com/Tangerg/go-sdk/jsonschema`: a jsonschema implementation, with validation
+- `github.com/Tangerg/go-sdk/internal/jsonrpc2`: a fork of x/tools/internal/jsonrpc2_v2
 
 The JSON-RPC implementation is hidden, to avoid tight coupling. As described in the next section, the only aspects of JSON-RPC that need to be exposed in the SDK are the message types, for the purposes of defining custom transports. We can expose these types by promoting them from the `mcp` package using aliases or wrappers.
 
@@ -445,7 +445,7 @@ server.AddReceivingMiddleware(withLogging)
 
 #### Rate Limiting
 
-Rate limiting can be configured using middleware. Please see [examples/rate-limiting](<https://github.com/modelcontextprotocol/go-sdk/tree/main/examples/rate-limiting>) for an example on how to implement this.
+Rate limiting can be configured using middleware. Please see [examples/rate-limiting](<https://github.com/Tangerg/go-sdk/tree/main/examples/rate-limiting>) for an example on how to implement this.
 
 ### Errors
 
@@ -888,7 +888,7 @@ The content in this section will also be included in a CONTRIBUTING.md file in t
 
 ## Hosting, copyright, and license
 
-The SDK will be hosted under github.com/modelcontextprotocol/go-sdk, MIT license, copyright "Go SDK Authors". Each Go file in the repository will have a standard copyright header. For example:
+The SDK will be hosted under github.com/Tangerg/go-sdk, MIT license, copyright "Go SDK Authors". Each Go file in the repository will have a standard copyright header. For example:
 
 ```go
 // Copyright 2025 The Go MCP SDK Authors. All rights reserved.

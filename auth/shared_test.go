@@ -9,7 +9,7 @@ import (
 	"slices"
 	"testing"
 
-	"github.com/modelcontextprotocol/go-sdk/internal/oauthtest"
+	"github.com/Tangerg/go-sdk/internal/oauthtest"
 )
 
 func TestAuthorizationServerMetadataURLs(t *testing.T) {

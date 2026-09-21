@@ -24,11 +24,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/auth"
-	internaljson "github.com/modelcontextprotocol/go-sdk/internal/json"
-	"github.com/modelcontextprotocol/go-sdk/internal/jsonrpc2"
-	"github.com/modelcontextprotocol/go-sdk/internal/mcpgodebug"
-	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
+	"github.com/Tangerg/go-sdk/auth"
+	internaljson "github.com/Tangerg/go-sdk/internal/json"
+	"github.com/Tangerg/go-sdk/internal/jsonrpc2"
+	"github.com/Tangerg/go-sdk/internal/mcpgodebug"
+	"github.com/Tangerg/go-sdk/jsonrpc"
 )
 
 // nowrapinvalidparams is a compatibility parameter that restores the previous
@@ -36,7 +36,7 @@ import (
 // params-decoding failure is wrapped with [jsonrpc2.ErrInvalidParams] so the
 // wire response carries error code -32602 ("invalid params") rather than the
 // zero-value code 0. See:
-// https://github.com/modelcontextprotocol/go-sdk/issues/976#issuecomment-4829124838.
+// https://github.com/Tangerg/go-sdk/issues/976#issuecomment-4829124838.
 //
 // See the documentation for the mcpgodebug package for instructions how to enable it.
 // The option will be removed in a future version of the SDK.

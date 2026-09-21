@@ -68,7 +68,7 @@ infoWithIcon
 		"serverInfo": {
 			"name": "testServer",
 			"version": "v1.0.0",
-			"websiteUrl": "https://github.com/modelcontextprotocol/go-sdk",
+			"websiteUrl": "https://github.com/Tangerg/go-sdk",
 			"icons": [
 				{
 					"src": "foobar",
