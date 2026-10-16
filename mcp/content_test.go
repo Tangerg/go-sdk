@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/Tangerg/go-sdk/mcp"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestContent(t *testing.T) {
@@ -157,11 +157,11 @@ func TestEmbeddedResource(t *testing.T) {
 		},
 		{
 			&mcp.ResourceContents{URI: "u", MIMEType: "m", Text: "t", Meta: mcp.Meta{"key": "value"}},
-			`{"uri":"u","mimeType":"m","text":"t","_meta":{"key":"value"}}`,
+			`{"uri":"u","mimeType":"m","_meta":{"key":"value"},"text":"t"}`,
 		},
 		{
 			&mcp.ResourceContents{URI: "u"},
-			`{"uri":"u"}`,
+			`{"uri":"u","text":""}`,
 		},
 		{
 			&mcp.ResourceContents{URI: "u", Blob: []byte{}},

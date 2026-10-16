@@ -9,6 +9,7 @@ package mcp
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	internaljson "github.com/Tangerg/go-sdk/internal/json"
@@ -298,13 +299,62 @@ func (c *ToolResultContent) fromWire(wire *wireContent) {
 }
 
 // ResourceContents contains the contents of a specific resource or
-// sub-resource.
+// sub-resource. A nil Blob selects text, including an empty Text. A non-nil
+// Blob selects binary content, including zero bytes, and requires empty Text.
+// Decoding requires exactly one non-null text or blob member.
 type ResourceContents struct {
 	URI      string `json:"uri"`
 	MIMEType string `json:"mimeType,omitempty"`
 	Text     string `json:"text,omitempty"`
 	Blob     []byte `json:"blob,omitzero"`
 	Meta     Meta   `json:"_meta,omitempty"`
+}
+
+func (r ResourceContents) MarshalJSON() ([]byte, error) {
+	if r.Text != "" && r.Blob != nil {
+		return nil, errors.New("resource contents carries both text and blob")
+	}
+	type resource ResourceContents
+	wire := struct {
+		resource
+		Text *string `json:"text,omitempty"`
+	}{resource: resource(r)}
+	if r.Blob == nil {
+		wire.Text = &r.Text
+	}
+	return json.Marshal(wire)
+}
+
+func (r *ResourceContents) UnmarshalJSON(data []byte) error {
+	type resource ResourceContents
+	var wire struct {
+		resource
+		Text json.RawMessage `json:"text"`
+		Blob json.RawMessage `json:"blob"`
+	}
+	if err := internaljson.Unmarshal(data, &wire); err != nil {
+		return err
+	}
+	if (len(wire.Text) == 0) == (len(wire.Blob) == 0) {
+		return errors.New("resource contents requires exactly one text or blob member")
+	}
+	if len(wire.Text) != 0 {
+		if wire.Text[0] != '"' {
+			return errors.New("resource text must be a string")
+		}
+		if err := internaljson.Unmarshal(wire.Text, &wire.resource.Text); err != nil {
+			return err
+		}
+	} else {
+		if wire.Blob[0] != '"' {
+			return errors.New("resource blob must be a base64 string")
+		}
+		if err := internaljson.Unmarshal(wire.Blob, &wire.resource.Blob); err != nil {
+			return err
+		}
+	}
+	*r = ResourceContents(wire.resource)
+	return nil
 }
 
 // wireContent is the wire format for content.

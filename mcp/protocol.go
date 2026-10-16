@@ -1948,8 +1948,8 @@ type Tool struct {
 	// supports the 2020-12 draft of JSON schema. To do your own validation, use
 	// [Server.AddTool].
 	//
-	// From the client, this field will hold the default JSON marshaling of the
-	// server's input schema (a map[string]any).
+	// From the client, this field holds the decoded schema with json.Number
+	// values, preserving numeric constraints without floating-point rounding.
 	InputSchema any `json:"inputSchema"`
 	// Intended for programmatic or logical use, but used as a display name in past
 	// specs or fallback (if title isn't present).
@@ -1966,8 +1966,8 @@ type Tool struct {
 	// supports the 2020-12 draft of JSON schema. To do your own validation, use
 	// [Server.AddTool].
 	//
-	// From the client, this field will hold the default JSON marshaling of the
-	// server's output schema (a map[string]any).
+	// From the client, this field holds the decoded schema with json.Number
+	// values, preserving numeric constraints without floating-point rounding.
 	OutputSchema any `json:"outputSchema,omitempty"`
 	// Intended for UI and end-user contexts — optimized to be human-readable and
 	// easily understood, even by those unfamiliar with domain-specific terminology.
@@ -1976,6 +1976,16 @@ type Tool struct {
 	Title string `json:"title,omitempty"`
 	// Icons for the tool, if any.
 	Icons []Icon `json:"icons,omitempty"`
+}
+
+func (t *Tool) UnmarshalJSON(data []byte) error {
+	type wireTool Tool
+	var wire wireTool
+	if err := internaljson.UnmarshalUseNumber(data, &wire); err != nil {
+		return err
+	}
+	*t = Tool(wire)
+	return nil
 }
 
 // hintomitempty is a compatibility parameter that restores the pre-1.7.0
