@@ -27,11 +27,11 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/Tangerg/go-sdk/internal/jsonrpc2"
+	"github.com/Tangerg/go-sdk/jsonrpc"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/jsonschema-go/jsonschema"
-	"github.com/Tangerg/go-sdk/internal/jsonrpc2"
-	"github.com/Tangerg/go-sdk/jsonrpc"
 )
 
 type hiParams struct {
@@ -2635,8 +2635,8 @@ type subListenEvent struct {
 // list-changed notification it receives into events, tagged with the kind
 // and the subscription ID extracted from _meta.
 func newSubListenClient(events chan subListenEvent) *Client {
-	asEvent := func(kind string, raw any) subListenEvent {
-		return subListenEvent{kind, fmt.Sprint(raw)}
+	asEvent := func(kind string, raw json.RawMessage) subListenEvent {
+		return subListenEvent{kind, string(raw)}
 	}
 	c := NewClient(testImpl, &ClientOptions{
 		ToolListChangedHandler: func(_ context.Context, req *ToolListChangedRequest) {
@@ -2841,7 +2841,7 @@ func TestResourceSubscriptions_Streamable(t *testing.T) {
 		ResourceUpdatedHandler: func(_ context.Context, req *ResourceUpdatedNotificationRequest) {
 			id := ""
 			if req.Params != nil && req.Params.Meta != nil {
-				id = fmt.Sprint(req.Params.Meta[MetaKeySubscriptionID])
+				id = string(req.Params.Meta[MetaKeySubscriptionID])
 			}
 			events <- resourceSubEvent{uri: req.Params.URI, id: id}
 		},
@@ -2911,7 +2911,7 @@ func TestResourceSubscriptions_InMemory(t *testing.T) {
 		ResourceUpdatedHandler: func(_ context.Context, req *ResourceUpdatedNotificationRequest) {
 			id := ""
 			if req.Params != nil && req.Params.Meta != nil {
-				id = fmt.Sprint(req.Params.Meta[MetaKeySubscriptionID])
+				id = string(req.Params.Meta[MetaKeySubscriptionID])
 			}
 			events <- resourceSubEvent{uri: req.Params.URI, id: id}
 		},
@@ -3060,7 +3060,7 @@ func TestResourceSubscriptions_MultipleURIs(t *testing.T) {
 		ResourceUpdatedHandler: func(_ context.Context, req *ResourceUpdatedNotificationRequest) {
 			id := ""
 			if req.Params != nil && req.Params.Meta != nil {
-				id = fmt.Sprint(req.Params.Meta[MetaKeySubscriptionID])
+				id = string(req.Params.Meta[MetaKeySubscriptionID])
 			}
 			events <- resourceSubEvent{uri: req.Params.URI, id: id}
 		},
@@ -3245,12 +3245,12 @@ func TestSubscriptionsListen_ResourceListChanged(t *testing.T) {
 	}
 	defer ss.Close()
 
-	asEvent := func(kind string, raw any) subListenEvent {
-		return subListenEvent{kind, fmt.Sprint(raw)}
+	asEvent := func(kind string, raw json.RawMessage) subListenEvent {
+		return subListenEvent{kind, string(raw)}
 	}
 	c := NewClient(testImpl, &ClientOptions{
 		ResourceListChangedHandler: func(_ context.Context, req *ResourceListChangedRequest) {
-			id := any(nil)
+			var id json.RawMessage
 			if req.Params != nil && req.Params.Meta != nil {
 				id = req.Params.Meta[MetaKeySubscriptionID]
 			}
@@ -3941,12 +3941,12 @@ func TestServerLogLevelDoesNotLeakBetweenNewProtocolRequests(t *testing.T) {
 
 func newProtocolMeta(logLevel LoggingLevel) Meta {
 	m := Meta{
-		MetaKeyProtocolVersion:    protocolVersion20260728,
-		MetaKeyClientInfo:         testImpl,
-		MetaKeyClientCapabilities: (&ClientCapabilities{}).toV2(),
+		MetaKeyProtocolVersion:    mustMarshal(protocolVersion20260728),
+		MetaKeyClientInfo:         mustMarshal(testImpl),
+		MetaKeyClientCapabilities: mustMarshal((&ClientCapabilities{}).toV2()),
 	}
 	if logLevel != "" {
-		m[MetaKeyLogLevel] = logLevel
+		m[MetaKeyLogLevel] = mustMarshal(logLevel)
 	}
 	return m
 }

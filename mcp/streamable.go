@@ -1638,7 +1638,7 @@ func (c *streamableServerConn) servePOST(w http.ResponseWriter, req *http.Reques
 			// TODO: this validation can be moved within validateMcpHeaders.
 			var metaVersion string
 			if meta := extractRequestMeta(jreq.Params); meta != nil {
-				metaVersion, _ = meta[MetaKeyProtocolVersion].(string)
+				metaVersion, _ = decodeMetaValue[string](meta, MetaKeyProtocolVersion)
 			}
 			if (jreq.IsCall() && protocolVersion >= protocolVersion20260728) || metaVersion != "" {
 				// Extract again the protocol version from the context to see what the client
@@ -2616,7 +2616,7 @@ func protocolVersionFromMessage(msg jsonrpc.Message) string {
 	if meta == nil {
 		return ""
 	}
-	v, _ := meta[MetaKeyProtocolVersion].(string)
+	v, _ := decodeMetaValue[string](meta, MetaKeyProtocolVersion)
 	return v
 }
 

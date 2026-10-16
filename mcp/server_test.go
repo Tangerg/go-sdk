@@ -18,10 +18,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/Tangerg/go-sdk/internal/jsonrpc2"
 	"github.com/Tangerg/go-sdk/jsonrpc"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
 type testItem struct {
@@ -2322,7 +2322,7 @@ func TestNotifySubscribedSessionsDoesNotShareMeta(t *testing.T) {
 		t.Cleanup(func() { ss.Close(); conn.Close() })
 	}
 
-	params := &ResourceUpdatedNotificationParams{URI: "test://r", Meta: Meta{"caller": "set"}}
+	params := &ResourceUpdatedNotificationParams{URI: "test://r", Meta: Meta{"caller": mustMarshal("set")}}
 	server.notifySubscribedSessions(subscribers, notificationResourceUpdated, func() Params {
 		p := *params
 		return &p

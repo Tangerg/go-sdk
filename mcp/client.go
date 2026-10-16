@@ -18,10 +18,10 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/Tangerg/go-sdk/internal/json"
 	"github.com/Tangerg/go-sdk/internal/jsonrpc2"
 	"github.com/Tangerg/go-sdk/jsonrpc"
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
 // A Client is an MCP client, which may be connected to an MCP server
@@ -418,13 +418,17 @@ func (c *Client) Connect(ctx context.Context, t Transport, opts *ClientSessionOp
 func (c *Client) discover(ctx context.Context, cs *ClientSession) (*InitializeResult, error) {
 	protocolVersion := protocolVersionFromContext(ctx)
 	caps := c.capabilities(protocolVersion)
-	params := &DiscoverParams{
-		Meta: Meta{
-			MetaKeyProtocolVersion:    protocolVersion,
-			MetaKeyClientInfo:         c.impl,
-			MetaKeyClientCapabilities: caps.toV2(),
-		},
+	params := &DiscoverParams{}
+	for key, value := range map[string]any{
+		MetaKeyProtocolVersion:    protocolVersion,
+		MetaKeyClientInfo:         c.impl,
+		MetaKeyClientCapabilities: caps.toV2(),
+	} {
+		if err := params.Meta.Set(key, value); err != nil {
+			return nil, err
+		}
 	}
+
 	req := &DiscoverRequest{Session: cs, Params: params}
 	res, err := handleSend[*DiscoverResult](ctx, methodDiscover, req)
 	if err != nil {
@@ -528,26 +532,28 @@ func (cs *ClientSession) usesNewProtocol() bool {
 func injectRequestMeta[T any, P interface {
 	*T
 	Params
-}](cs *ClientSession, params P) P {
+}](cs *ClientSession, params P) (P, error) {
 	res := cs.state.InitializeResult
 	if params == nil {
 		params = new(T)
 	}
-	m := params.GetMeta()
-	if m == nil {
-		m = map[string]any{}
-	}
-	if _, ok := m[MetaKeyProtocolVersion]; !ok {
-		m[MetaKeyProtocolVersion] = res.ProtocolVersion
-	}
-	if _, ok := m[MetaKeyClientInfo]; !ok && cs.client.impl != nil {
-		m[MetaKeyClientInfo] = cs.client.impl
-	}
-	if _, ok := m[MetaKeyClientCapabilities]; !ok {
-		m[MetaKeyClientCapabilities] = cs.client.capabilities(res.ProtocolVersion).toV2()
+	m := maps.Clone(params.GetMeta())
+	for key, value := range map[string]any{
+		MetaKeyProtocolVersion:    res.ProtocolVersion,
+		MetaKeyClientInfo:         cs.client.impl,
+		MetaKeyClientCapabilities: cs.client.capabilities(res.ProtocolVersion).toV2(),
+	} {
+		if key == MetaKeyClientInfo && cs.client.impl == nil {
+			continue
+		}
+		if _, ok := m[key]; !ok {
+			if err := m.Set(key, value); err != nil {
+				return params, err
+			}
+		}
 	}
 	params.SetMeta(m)
-	return params
+	return params, nil
 }
 
 func (cs *ClientSession) ID() string {
@@ -1242,7 +1248,11 @@ func (cs *ClientSession) ListPrompts(ctx context.Context, params *ListPromptsPar
 		if result, ok := cachedListResult(&cs.promptsCache, params); ok {
 			return result, nil
 		}
-		params = injectRequestMeta(cs, params)
+		var err error
+		params, err = injectRequestMeta(cs, params)
+		if err != nil {
+			return nil, err
+		}
 	}
 	result, err := handleSend[*ListPromptsResult](ctx, methodListPrompts, newClientRequest(cs, orZero[Params](params)))
 	if err != nil {
@@ -1257,7 +1267,11 @@ func (cs *ClientSession) ListPrompts(ctx context.Context, params *ListPromptsPar
 // GetPrompt gets a prompt from the server.
 func (cs *ClientSession) GetPrompt(ctx context.Context, params *GetPromptParams) (*GetPromptResult, error) {
 	if cs.usesNewProtocol() {
-		params = injectRequestMeta(cs, params)
+		var err error
+		params, err = injectRequestMeta(cs, params)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return handleSend[*GetPromptResult](ctx, methodGetPrompt, newClientRequest(cs, orZero[Params](params)))
 }
@@ -1268,7 +1282,11 @@ func (cs *ClientSession) ListTools(ctx context.Context, params *ListToolsParams)
 		if result, ok := cachedListResult(&cs.toolsCache, params); ok {
 			return result, nil
 		}
-		params = injectRequestMeta(cs, params)
+		var err error
+		params, err = injectRequestMeta(cs, params)
+		if err != nil {
+			return nil, err
+		}
 	}
 	result, err := handleSend[*ListToolsResult](ctx, methodListTools, newClientRequest(cs, orZero[Params](params)))
 	if err != nil {
@@ -1296,7 +1314,11 @@ func (cs *ClientSession) CallTool(ctx context.Context, params *CallToolParams) (
 		ctx = context.WithValue(ctx, toolContextKey, tool)
 	}
 	if cs.usesNewProtocol() {
-		params = injectRequestMeta(cs, params)
+		var err error
+		params, err = injectRequestMeta(cs, params)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return handleSend[*CallToolResult](ctx, methodCallTool, newClientRequest(cs, orZero[Params](params)))
 }
@@ -1320,7 +1342,11 @@ func (cs *ClientSession) ListResources(ctx context.Context, params *ListResource
 		if result, ok := cachedListResult(&cs.resourcesCache, params); ok {
 			return result, nil
 		}
-		params = injectRequestMeta(cs, params)
+		var err error
+		params, err = injectRequestMeta(cs, params)
+		if err != nil {
+			return nil, err
+		}
 	}
 	result, err := handleSend[*ListResourcesResult](ctx, methodListResources, newClientRequest(cs, orZero[Params](params)))
 	if err != nil {
@@ -1338,7 +1364,11 @@ func (cs *ClientSession) ListResourceTemplates(ctx context.Context, params *List
 		if result, ok := cachedListResult(&cs.resourceTemplatesCache, params); ok {
 			return result, nil
 		}
-		params = injectRequestMeta(cs, params)
+		var err error
+		params, err = injectRequestMeta(cs, params)
+		if err != nil {
+			return nil, err
+		}
 	}
 	result, err := handleSend[*ListResourceTemplatesResult](ctx, methodListResourceTemplates, newClientRequest(cs, orZero[Params](params)))
 	if err != nil {
@@ -1360,7 +1390,11 @@ func (cs *ClientSession) ReadResource(ctx context.Context, params *ReadResourceP
 		if result, ok := cs.readResourceCache.get(uri); ok {
 			return result, nil
 		}
-		params = injectRequestMeta(cs, params)
+		var err error
+		params, err = injectRequestMeta(cs, params)
+		if err != nil {
+			return nil, err
+		}
 	}
 	result, err := handleSend[*ReadResourceResult](ctx, methodReadResource, newClientRequest(cs, orZero[Params](params)))
 	if err != nil {
@@ -1374,7 +1408,11 @@ func (cs *ClientSession) ReadResource(ctx context.Context, params *ReadResourceP
 
 func (cs *ClientSession) Complete(ctx context.Context, params *CompleteParams) (*CompleteResult, error) {
 	if cs.usesNewProtocol() {
-		params = injectRequestMeta(cs, params)
+		var err error
+		params, err = injectRequestMeta(cs, params)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return handleSend[*CompleteResult](ctx, methodComplete, newClientRequest(cs, orZero[Params](params)))
 }
@@ -1458,8 +1496,12 @@ func (cs *ClientSession) cancelAllResourceSubscriptions() {
 // subsequent opted-in notifications (e.g. tools/list_changed) are delivered through the
 // usual handlers registered in [ClientOptions].
 func (cs *ClientSession) subscriptionsListen(ctx context.Context, params *SubscriptionsListenParams) error {
-	params = injectRequestMeta(cs, params)
-	_, err := handleSend[*SubscriptionsListenResult](ctx, methodSubscriptionsListen, newClientRequest(cs, orZero[Params](params)))
+	var err error
+	params, err = injectRequestMeta(cs, params)
+	if err != nil {
+		return err
+	}
+	_, err = handleSend[*SubscriptionsListenResult](ctx, methodSubscriptionsListen, newClientRequest(cs, orZero[Params](params)))
 	return err
 }
 
@@ -1682,7 +1724,12 @@ func CallCustomMethod[P paramsPtr[PT], R Result, PT any](
 		return zero, fmt.Errorf("mcp: CallCustomMethod: %q is not registered; call AddSendingCustomMethod first", method)
 	}
 	if cs.usesNewProtocol() {
-		params = injectRequestMeta(cs, params)
+		var err error
+		params, err = injectRequestMeta(cs, params)
+		if err != nil {
+			var zero R
+			return zero, err
+		}
 	}
 	return handleSend[R](ctx, method, &ClientRequest[P]{
 		Session: cs,

@@ -33,7 +33,7 @@ func TestContent(t *testing.T) {
 		{
 			&mcp.TextContent{
 				Text:        "hello",
-				Meta:        mcp.Meta{"key": "value"},
+				Meta:        mcp.Meta{"key": json.RawMessage("\"value\"")},
 				Annotations: &mcp.Annotations{Priority: 1.0},
 			},
 			`{"type":"text","text":"hello","_meta":{"key":"value"},"annotations":{"priority":1}}`,
@@ -57,7 +57,7 @@ func TestContent(t *testing.T) {
 			&mcp.ImageContent{
 				Data:        []byte("a1b2c3"),
 				MIMEType:    "image/png",
-				Meta:        mcp.Meta{"key": "value"},
+				Meta:        mcp.Meta{"key": json.RawMessage("\"value\"")},
 				Annotations: &mcp.Annotations{Priority: 1.0},
 			},
 			`{"type":"image","mimeType":"image/png","data":"YTFiMmMz","_meta":{"key":"value"},"annotations":{"priority":1}}`,
@@ -81,7 +81,7 @@ func TestContent(t *testing.T) {
 			&mcp.AudioContent{
 				Data:        []byte("a1b2c3"),
 				MIMEType:    "audio/wav",
-				Meta:        mcp.Meta{"key": "value"},
+				Meta:        mcp.Meta{"key": json.RawMessage("\"value\"")},
 				Annotations: &mcp.Annotations{Priority: 1.0},
 			},
 			`{"type":"audio","mimeType":"audio/wav","data":"YTFiMmMz","_meta":{"key":"value"},"annotations":{"priority":1}}`,
@@ -101,7 +101,7 @@ func TestContent(t *testing.T) {
 		{
 			&mcp.EmbeddedResource{
 				Resource:    &mcp.ResourceContents{URI: "file://foo", MIMEType: "text", Text: "abc"},
-				Meta:        mcp.Meta{"key": "value"},
+				Meta:        mcp.Meta{"key": json.RawMessage("\"value\"")},
 				Annotations: &mcp.Annotations{Priority: 1.0},
 			},
 			`{"type":"resource","resource":{"uri":"file://foo","mimeType":"text","text":"abc"},"_meta":{"key":"value"},"annotations":{"priority":1}}`,
@@ -120,7 +120,7 @@ func TestContent(t *testing.T) {
 				Title:       "A comprehensive example resource",
 				Description: "This resource demonstrates all fields",
 				MIMEType:    "text/plain",
-				Meta:        mcp.Meta{"custom": "metadata"},
+				Meta:        mcp.Meta{"custom": json.RawMessage("\"metadata\"")},
 				Icons:       []mcp.Icon{{Source: "foobar", MIMEType: "image/png", Sizes: []string{"48x48"}, Theme: mcp.IconThemeLight}},
 			},
 			`{"type":"resource_link","mimeType":"text/plain","uri":"https://example.com/resource","name":"Example Resource","title":"A comprehensive example resource","description":"This resource demonstrates all fields","_meta":{"custom":"metadata"},"icons":[{"src":"foobar","mimeType":"image/png","sizes":["48x48"],"theme":"light"}]}`,
@@ -156,7 +156,7 @@ func TestEmbeddedResource(t *testing.T) {
 			`{"uri":"u","text":"t"}`,
 		},
 		{
-			&mcp.ResourceContents{URI: "u", MIMEType: "m", Text: "t", Meta: mcp.Meta{"key": "value"}},
+			&mcp.ResourceContents{URI: "u", MIMEType: "m", Text: "t", Meta: mcp.Meta{"key": json.RawMessage("\"value\"")}},
 			`{"uri":"u","mimeType":"m","_meta":{"key":"value"},"text":"t"}`,
 		},
 		{
@@ -172,7 +172,7 @@ func TestEmbeddedResource(t *testing.T) {
 			`{"uri":"u","blob":"AQ=="}`,
 		},
 		{
-			&mcp.ResourceContents{URI: "u", MIMEType: "m", Blob: []byte{1}, Meta: mcp.Meta{"key": "value"}},
+			&mcp.ResourceContents{URI: "u", MIMEType: "m", Blob: []byte{1}, Meta: mcp.Meta{"key": json.RawMessage("\"value\"")}},
 			`{"uri":"u","mimeType":"m","blob":"AQ==","_meta":{"key":"value"}}`,
 		},
 	} {

@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/Tangerg/go-sdk/jsonrpc"
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestValidateRequestMeta(t *testing.T) {
@@ -236,9 +236,9 @@ func TestServerRequest_PerRequestAccessors(t *testing.T) {
 	info := &Implementation{Name: "c", Version: "1"}
 	params := &CallToolParamsRaw{
 		Meta: Meta{
-			MetaKeyProtocolVersion:    protocolVersion20260728,
-			MetaKeyClientInfo:         info,
-			MetaKeyClientCapabilities: caps,
+			MetaKeyProtocolVersion:    mustMarshal(protocolVersion20260728),
+			MetaKeyClientInfo:         mustMarshal(info),
+			MetaKeyClientCapabilities: mustMarshal(caps),
 		},
 		Name: "x",
 	}

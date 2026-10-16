@@ -6,7 +6,7 @@ package mcp
 
 import (
 	"encoding/json"
-	"maps"
+	"reflect"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -26,7 +26,7 @@ func TestParamsMeta(t *testing.T) {
 		return string(data)
 	}
 
-	meta := map[string]any{"m": 1}
+	meta := Meta{"m": mustMarshal(1)}
 
 	// You can set the embedded Meta field to a literal map.
 	p := &CallToolParams{
@@ -45,13 +45,13 @@ func TestParamsMeta(t *testing.T) {
 	}
 
 	// The GetMeta and SetMeta functions work as expected.
-	if g := p.GetMeta(); !maps.Equal(g, meta) {
+	if g := p.GetMeta(); !reflect.DeepEqual(g, meta) {
 		t.Errorf("got %+v, want %+v", g, meta)
 	}
 
-	meta2 := map[string]any{"x": 2}
+	meta2 := Meta{"x": mustMarshal(2)}
 	p.SetMeta(meta2)
-	if g := p.GetMeta(); !maps.Equal(g, meta2) {
+	if g := p.GetMeta(); !reflect.DeepEqual(g, meta2) {
 		t.Errorf("got %+v, want %+v", g, meta2)
 	}
 
@@ -568,7 +568,7 @@ func TestToolUseContent_UnmarshalJSON(t *testing.T) {
 				ID:    "t1",
 				Name:  "calc",
 				Input: map[string]any{"x": 1.0},
-				Meta:  Meta{"requestId": "req-123"},
+				Meta:  Meta{"requestId": mustMarshal("req-123")},
 			},
 		},
 	}
@@ -1273,7 +1273,7 @@ func TestContentUnmarshal(t *testing.T) {
 	content := []Content{&TextContent{Text: "t"}}
 
 	ctr := &CallToolResult{
-		Meta:              Meta{"m": true},
+		Meta:              Meta{"m": mustMarshal(true)},
 		Content:           content,
 		IsError:           true,
 		StructuredContent: map[string]any{"s": "x"},
@@ -1282,7 +1282,7 @@ func TestContentUnmarshal(t *testing.T) {
 	roundtrip(ctr, &got)
 
 	ctrf := &CallToolResult{
-		Meta:              Meta{"m": true},
+		Meta:              Meta{"m": mustMarshal(true)},
 		Content:           content,
 		IsError:           true,
 		StructuredContent: json.Number("3"),

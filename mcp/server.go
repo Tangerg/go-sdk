@@ -24,12 +24,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/google/jsonschema-go/jsonschema"
 	internaljson "github.com/Tangerg/go-sdk/internal/json"
 	"github.com/Tangerg/go-sdk/internal/jsonrpc2"
 	"github.com/Tangerg/go-sdk/internal/mcpgodebug"
 	"github.com/Tangerg/go-sdk/internal/util"
 	"github.com/Tangerg/go-sdk/jsonrpc"
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/yosida95/uritemplate/v3"
 )
 
@@ -822,7 +822,10 @@ func (s *Server) notifySubscribedSessions(subscribers map[*ServerSession]jsonrpc
 			ctx, cancel := context.WithTimeout(context.Background(), notifyTimeout)
 			defer cancel()
 			params := makeParams()
-			injectMetaSubscriptionID(params, reqID)
+			if err := injectMetaSubscriptionID(params, reqID); err != nil {
+				s.opts.Logger.Warn(fmt.Sprintf("calling %s: %v", method, err))
+				return
+			}
 			if err := handleNotify(ctx, method, newRequest(sess, params)); err != nil {
 				s.opts.Logger.Warn(fmt.Sprintf("calling %s: %v", method, err))
 			}
@@ -837,15 +840,15 @@ func (s *Server) notifySubscribedSessions(subscribers map[*ServerSession]jsonrpc
 // originated.
 //
 // [subscriptions/listen]: https://modelcontextprotocol.io/seps/2575-stateless-mcp#multiple-concurrent-subscriptions
-func injectMetaSubscriptionID(params Params, reqID jsonrpc.ID) {
+func injectMetaSubscriptionID(params Params, reqID jsonrpc.ID) error {
 	// Clone: params may share its _meta map with the caller's struct and with
 	// the other sessions' copies, and this runs concurrently per session.
 	m := maps.Clone(params.GetMeta())
-	if m == nil {
-		m = map[string]any{}
+	if err := m.Set(MetaKeySubscriptionID, reqID.Raw()); err != nil {
+		return err
 	}
-	m[MetaKeySubscriptionID] = reqID.Raw()
 	params.SetMeta(m)
+	return nil
 }
 
 // shouldSendListChangedNotification checks if the server's capabilities allow
@@ -1322,9 +1325,13 @@ func (s *Server) subscriptionsListen(ctx context.Context, req *SubscriptionsList
 		})
 	}
 
+	var subscriptionMeta Meta
+	if err := subscriptionMeta.Set(MetaKeySubscriptionID, requestID.Raw()); err != nil {
+		return nil, err
+	}
 	ackParams := &SubscriptionsAcknowledgedParams{
 		Notifications: allowed,
-		Meta:          Meta{MetaKeySubscriptionID: requestID.Raw()},
+		Meta:          subscriptionMeta,
 	}
 	if err := req.Session.notifySubscriptionAcked(ctx, ackParams); err != nil {
 		return nil, fmt.Errorf("sending subscriptions/acknowledged: %w", err)
@@ -1335,7 +1342,7 @@ func (s *Server) subscriptionsListen(ctx context.Context, req *SubscriptionsList
 		<-ctx.Done()
 	}
 	return &SubscriptionsListenResult{
-		Meta: Meta{MetaKeySubscriptionID: requestID.Raw()},
+		Meta: subscriptionMeta,
 	}, nil
 }
 
@@ -2071,7 +2078,9 @@ func (ss *ServerSession) handle(ctx context.Context, req *jsonrpc.Request) (any,
 	// interface. Annotating that value panics.
 	if validatedMeta.usesNewProtocol && res != nil && !res.isNil() {
 		annotateResultType(res)
-		annotateServerInfo(res, ss.server.impl)
+		if err := annotateServerInfo(res, ss.server.impl); err != nil {
+			return nil, err
+		}
 	}
 	return res, nil
 }
@@ -2079,22 +2088,22 @@ func (ss *ServerSession) handle(ctx context.Context, req *jsonrpc.Request) (any,
 // annotateServerInfo sets [MetaKeyServerInfo] on the result's `_meta` unless
 // it is already present. Per SEP-2575, servers should identify themselves in
 // each result's `_meta`.
-func annotateServerInfo(res Result, impl *Implementation) {
+func annotateServerInfo(res Result, impl *Implementation) error {
 	if res == nil || impl == nil {
-		return
+		return nil
 	}
 	if _, isEmpty := res.(*emptyResult); isEmpty {
-		return
+		return nil
 	}
 	m := res.GetMeta()
-	if m == nil {
-		m = map[string]any{}
-	}
 	if _, ok := m[MetaKeyServerInfo]; ok {
-		return
+		return nil
 	}
-	m[MetaKeyServerInfo] = impl
+	if err := m.Set(MetaKeyServerInfo, impl); err != nil {
+		return err
+	}
 	res.SetMeta(m)
+	return nil
 }
 
 // InitializeParams returns the InitializeParams provided during the client's

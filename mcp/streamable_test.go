@@ -30,12 +30,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/Tangerg/go-sdk/auth"
 	"github.com/Tangerg/go-sdk/internal/jsonrpc2"
 	"github.com/Tangerg/go-sdk/jsonrpc"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
 func TestStreamableTransports(t *testing.T) {
@@ -805,7 +805,7 @@ func completeCallToolResult() *CallToolResult {
 // add to every new-protocol response.
 func completeCallToolResultWithServerInfo(impl *Implementation) *CallToolResult {
 	r := completeCallToolResult()
-	r.Meta = Meta{MetaKeyServerInfo: impl}
+	r.Meta = Meta{MetaKeyServerInfo: mustMarshal(impl)}
 	return r
 }
 
@@ -1969,9 +1969,9 @@ func TestStreamableMcpHeaderValidation(t *testing.T) {
 	defer handler.closeAll()
 
 	testMeta := Meta{
-		MetaKeyProtocolVersion:    minVersionForStandardHeaders,
-		MetaKeyClientInfo:         map[string]any{"name": "testClient", "version": "v1.0.0"},
-		MetaKeyClientCapabilities: map[string]any{},
+		MetaKeyProtocolVersion:    mustMarshal(minVersionForStandardHeaders),
+		MetaKeyClientInfo:         mustMarshal(map[string]any{"name": "testClient", "version": "v1.0.0"}),
+		MetaKeyClientCapabilities: mustMarshal(map[string]any{}),
 	}
 	serverImpl := &Implementation{Name: "testServer", Version: "v1.0.0"}
 

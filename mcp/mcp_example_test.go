@@ -6,6 +6,7 @@ package mcp_test
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
@@ -85,7 +86,7 @@ func Example_progress() {
 	defer session.Close()
 	if _, err := session.CallTool(ctx, &mcp.CallToolParams{
 		Name: "makeProgress",
-		Meta: mcp.Meta{"progressToken": "abc123"},
+		Meta: mcp.Meta{"progressToken": json.RawMessage("\"abc123\"")},
 	}); err != nil {
 		log.Fatal(err)
 	}

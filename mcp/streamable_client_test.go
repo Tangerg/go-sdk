@@ -18,10 +18,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
 	"github.com/Tangerg/go-sdk/auth"
 	"github.com/Tangerg/go-sdk/internal/jsonrpc2"
 	"github.com/Tangerg/go-sdk/jsonrpc"
+	"github.com/google/go-cmp/cmp"
 	"golang.org/x/oauth2"
 )
 
@@ -1308,7 +1308,7 @@ func TestStreamableClientOAuth_RetrieveError(t *testing.T) {
 // fakeStreamableServer setups in the tests below.
 var discoverResult = &DiscoverResult{
 	Meta: Meta{
-		MetaKeyServerInfo: &Implementation{Name: "discoverServer", Version: "v1.0.0"},
+		MetaKeyServerInfo: mustMarshal(&Implementation{Name: "discoverServer", Version: "v1.0.0"}),
 	},
 	SupportedVersions: []string{protocolVersion20260728},
 	Capabilities: &ServerCapabilities{
@@ -1438,7 +1438,7 @@ func TestStreamableClientConnSetMCPHeaders_ProtocolVersion(t *testing.T) {
 		{
 			name:              "message meta wins when initializedResult unset",
 			initializedResult: nil,
-			msg:               req(1, methodListTools, &ListToolsParams{Meta: Meta{MetaKeyProtocolVersion: protocolVersion20260728}}),
+			msg:               req(1, methodListTools, &ListToolsParams{Meta: Meta{MetaKeyProtocolVersion: mustMarshal(protocolVersion20260728)}}),
 			want:              protocolVersion20260728,
 		},
 		{
@@ -1456,7 +1456,7 @@ func TestStreamableClientConnSetMCPHeaders_ProtocolVersion(t *testing.T) {
 		{
 			name:              "message meta preferred over stale initializedResult",
 			initializedResult: &InitializeResult{ProtocolVersion: protocolVersion20251125},
-			msg:               req(1, methodListTools, &ListToolsParams{Meta: Meta{MetaKeyProtocolVersion: protocolVersion20260728}}),
+			msg:               req(1, methodListTools, &ListToolsParams{Meta: Meta{MetaKeyProtocolVersion: mustMarshal(protocolVersion20260728)}}),
 			want:              protocolVersion20260728,
 		},
 		{
@@ -1485,7 +1485,7 @@ func TestStreamableClientConnSetMCPHeaders_ProtocolVersion(t *testing.T) {
 		{
 			name:              "message meta preferred over request context",
 			initializedResult: nil,
-			msg:               req(1, methodListTools, &ListToolsParams{Meta: Meta{MetaKeyProtocolVersion: protocolVersion20251125}}),
+			msg:               req(1, methodListTools, &ListToolsParams{Meta: Meta{MetaKeyProtocolVersion: mustMarshal(protocolVersion20251125)}}),
 			ctxVersion:        protocolVersion20260728,
 			want:              protocolVersion20251125,
 		},

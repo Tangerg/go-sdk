@@ -13,11 +13,11 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/Tangerg/go-sdk/internal/jsonrpc2"
+	"github.com/Tangerg/go-sdk/jsonrpc"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/jsonschema-go/jsonschema"
-	"github.com/Tangerg/go-sdk/internal/jsonrpc2"
-	"github.com/Tangerg/go-sdk/jsonrpc"
 )
 
 type Item struct {
@@ -663,7 +663,7 @@ func TestClientConnectDiscover(t *testing.T) {
 			discoverHandler: func() (Result, error) {
 				return &DiscoverResult{
 					Meta: Meta{
-						MetaKeyServerInfo: &Implementation{Name: "discoverServer", Version: "v1.0.0"},
+						MetaKeyServerInfo: mustMarshal(&Implementation{Name: "discoverServer", Version: "v1.0.0"}),
 					},
 					SupportedVersions: []string{protocolVersion20260728},
 					Capabilities: &ServerCapabilities{
@@ -698,7 +698,7 @@ func TestClientConnectDiscover(t *testing.T) {
 			discoverHandler: func() (Result, error) {
 				return &DiscoverResult{
 					Meta: Meta{
-						MetaKeyServerInfo: &Implementation{Name: "discoverServer", Version: "v1.0.0"},
+						MetaKeyServerInfo: mustMarshal(&Implementation{Name: "discoverServer", Version: "v1.0.0"}),
 					},
 					SupportedVersions: []string{otherVersionsOnly},
 					Capabilities:      &ServerCapabilities{},
@@ -816,19 +816,18 @@ func TestClientConnectDiscover_RequestContents(t *testing.T) {
 	}
 
 	meta := got.params.GetMeta()
-	if v, _ := meta[MetaKeyProtocolVersion].(string); v != protocolVersion20260728 {
+	if v, _ := decodeMetaValue[string](meta, MetaKeyProtocolVersion); v != protocolVersion20260728 {
 		t.Errorf("_meta[%s] = %q, want %q", MetaKeyProtocolVersion, v, protocolVersion20260728)
 	}
-	// _meta values round-trip through JSON, so on the server side they
-	// arrive as map[string]any rather than the typed Go pointers we sent.
-	info, ok := meta[MetaKeyClientInfo].(map[string]any)
+	// Metadata is interpreted only by the consumer.
+	info, ok := decodeMetaValue[map[string]any](meta, MetaKeyClientInfo)
 	if !ok {
 		t.Fatalf("_meta[%s] = %T, want map[string]any", MetaKeyClientInfo, meta[MetaKeyClientInfo])
 	}
 	if got, want := info["name"], any(clientImpl.Name); got != want {
 		t.Errorf("clientInfo.name = %v, want %v", got, want)
 	}
-	caps, ok := meta[MetaKeyClientCapabilities].(map[string]any)
+	caps, ok := decodeMetaValue[map[string]any](meta, MetaKeyClientCapabilities)
 	if !ok {
 		t.Fatalf("_meta[%s] = %T, want map[string]any", MetaKeyClientCapabilities, meta[MetaKeyClientCapabilities])
 	}
@@ -890,7 +889,7 @@ func TestInMemory_E2E_DiscoverFallback_NoOverlap(t *testing.T) {
 			if method == methodDiscover {
 				return &DiscoverResult{
 					Meta: Meta{
-						MetaKeyServerInfo: &Implementation{Name: "vpre-like-server", Version: "v1"},
+						MetaKeyServerInfo: mustMarshal(&Implementation{Name: "vpre-like-server", Version: "v1"}),
 					},
 					SupportedVersions: []string{protocolVersion20251125},
 					Capabilities:      &ServerCapabilities{},
@@ -1049,7 +1048,7 @@ func TestClientConnectDiscover_UnsupportedVersionNegotiation(t *testing.T) {
 					t.Errorf("discover req has unexpected type %T", req)
 					return nil, jsonrpc2.ErrMethodNotFound
 				}
-				if v, _ := sr.Params.GetMeta()[MetaKeyProtocolVersion].(string); v != "" {
+				if v, _ := decodeMetaValue[string](sr.Params.GetMeta(), MetaKeyProtocolVersion); v != "" {
 					observedDiscoverVersion.Store(v)
 				}
 				discoverCalls.Add(1)

@@ -514,33 +514,56 @@ func newRequest[S Session, P Params](s S, p P) Request {
 }
 
 // Meta is additional metadata for requests, responses and other types.
-type Meta map[string]any
+// Values must be valid encoded JSON. They retain their original representation,
+// so forwarding metadata never rounds numbers or changes null and empty values.
+// Decode a value into its
+// consumer's declared type when interpreting it.
+type Meta map[string]json.RawMessage
 
 // GetMeta returns metadata from a value.
-func (m Meta) GetMeta() map[string]any { return m }
+func (m Meta) GetMeta() Meta { return m }
 
 // SetMeta sets the metadata on a value.
-func (m *Meta) SetMeta(x map[string]any) { *m = x }
+func (m *Meta) SetMeta(x Meta) { *m = x }
 
 const progressTokenKey = "progressToken"
 
+// Set encodes a value into metadata. On error it leaves the metadata unchanged.
+func (m *Meta) Set(key string, value any) error {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("metadata %q: %w", key, err)
+	}
+	if *m == nil {
+		*m = Meta{}
+	}
+	(*m)[key] = raw
+	return nil
+}
+
 func getProgressToken(p Params) any {
-	return p.GetMeta()[progressTokenKey]
+	raw := p.GetMeta()[progressTokenKey]
+	if len(raw) == 0 {
+		return nil
+	}
+	var token any
+	if err := internaljson.UnmarshalUseNumber(raw, &token); err != nil {
+		panic(fmt.Sprintf("invalid progress token: %v", err))
+	}
+	return token
 }
 
 func setProgressToken(p Params, pt any) {
 	switch pt.(type) {
-	// Support int32 and int64 for atomic.IntNN.
-	case int, int32, int64, string:
+	case int, int32, int64, json.Number, string:
 	default:
-		panic(fmt.Sprintf("progress token %v is of type %[1]T, not int or string", pt))
+		panic(fmt.Sprintf("progress token %v is of type %[1]T, not a number or string", pt))
 	}
 	m := p.GetMeta()
-	if m == nil {
-		m = map[string]any{}
-		p.SetMeta(m)
+	if err := m.Set(progressTokenKey, pt); err != nil {
+		panic(err)
 	}
-	m[progressTokenKey] = pt
+	p.SetMeta(m)
 }
 
 // extractRequestMeta performs a lightweight partial unmarshal of the `_meta`
@@ -592,7 +615,7 @@ func validateRequestMeta(req *jsonrpc.Request) (*validatedMeta, error) {
 	if meta == nil {
 		return &validatedMeta{usesNewProtocol: false, initializeParams: nil}, nil
 	}
-	protocolVersion, ok := meta[MetaKeyProtocolVersion].(string)
+	protocolVersion, ok := decodeMetaValue[string](meta, MetaKeyProtocolVersion)
 	// An absent or empty value declares no version at all, which is also how the
 	// streamable handler reads `_meta.protocolVersion`.
 	if !ok || protocolVersion == "" {
@@ -733,7 +756,7 @@ func HasParams(req Request) bool {
 // initialize handshake.
 func (r *ServerRequest[P]) ProtocolVersion() string {
 	if m := getRequestMeta(r); m != nil {
-		if v, ok := m[MetaKeyProtocolVersion].(string); ok {
+		if v, ok := decodeMetaValue[string](m, MetaKeyProtocolVersion); ok {
 			return v
 		}
 	}
@@ -785,31 +808,23 @@ func (r *ServerRequest[P]) ClientCapabilities() *ClientCapabilities {
 
 // getRequestMeta returns the raw `_meta` map from the request's params, or
 // nil if the params are absent.
-func getRequestMeta[P Params](r *ServerRequest[P]) map[string]any {
+func getRequestMeta[P Params](r *ServerRequest[P]) Meta {
 	if !HasParams(r) {
 		return nil
 	}
 	return r.Params.GetMeta()
 }
 
-// decodeMetaValue decodes a typed value out of a `_meta` map. Values may
-// arrive either as the typed Go value (when constructed in-process) or as
-// the generic JSON map produced by encoding/json after wire transit. In the
-// latter case, the value is re-encoded and decoded into the target type.
-func decodeMetaValue[T any](m map[string]any, key string) (T, bool) {
-	var zero T
+func decodeMetaValue[T any](m Meta, key string) (T, bool) {
+	var value T
 	raw, ok := m[key]
-	if !ok || raw == nil {
-		return zero, false
+	if !ok || len(raw) == 0 {
+		return value, false
 	}
-	if v, ok := raw.(T); ok {
-		return v, true
+	if err := internaljson.Unmarshal(raw, &value); err != nil {
+		return value, false
 	}
-	var v T
-	if err := remarshal(raw, &v); err != nil {
-		return zero, false
-	}
-	return v, true
+	return value, true
 }
 
 func serverRequestFor[P Params](s *ServerSession, p P) *ServerRequest[P] {
@@ -823,9 +838,9 @@ func clientRequestFor[P Params](s *ClientSession, p P) *ClientRequest[P] {
 // Params is a parameter (input) type for an MCP call or notification.
 type Params interface {
 	// GetMeta returns metadata from a value.
-	GetMeta() map[string]any
+	GetMeta() Meta
 	// SetMeta sets the metadata on a value.
-	SetMeta(map[string]any)
+	SetMeta(Meta)
 
 	// isParams discourages implementation of Params outside of this package.
 	isParams()
@@ -855,11 +870,12 @@ type RequestParams interface {
 	Params
 
 	// GetProgressToken returns the progress token from the params' Meta field, or nil
-	// if there is none.
+	// if there is none. Numeric tokens are returned as json.Number. It panics
+	// if the encoded token is malformed JSON.
 	GetProgressToken() any
 
 	// SetProgressToken sets the given progress token into the params' Meta field.
-	// It panics if its argument is not an int or a string.
+	// It panics if its argument is not an int, int32, int64, json.Number, or string.
 	SetProgressToken(any)
 }
 
@@ -872,9 +888,9 @@ type Result interface {
 	isNil() bool
 
 	// GetMeta returns metadata from a value.
-	GetMeta() map[string]any
+	GetMeta() Meta
 	// SetMeta sets the metadata on a value.
-	SetMeta(map[string]any)
+	SetMeta(Meta)
 }
 
 // ResultBase can be embedded in custom result structs to satisfy the
@@ -896,10 +912,10 @@ func (x *ResultBase) isNil() bool { return x == nil }
 // Those methods cannot return nil, because jsonrpc2 cannot handle nils.
 type emptyResult struct{}
 
-func (*emptyResult) isResult()               {}
-func (x *emptyResult) isNil() bool           { return x == nil }
-func (*emptyResult) GetMeta() map[string]any { panic("should never be called") }
-func (*emptyResult) SetMeta(map[string]any)  { panic("should never be called") }
+func (*emptyResult) isResult()     {}
+func (x *emptyResult) isNil() bool { return x == nil }
+func (*emptyResult) GetMeta() Meta { panic("should never be called") }
+func (*emptyResult) SetMeta(Meta)  { panic("should never be called") }
 
 type listParams interface {
 	// Returns a pointer to the param's Cursor field.
