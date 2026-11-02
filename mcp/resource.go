@@ -15,9 +15,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/modelcontextprotocol/go-sdk/internal/mcpgodebug"
-	"github.com/modelcontextprotocol/go-sdk/internal/util"
-	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
+	"github.com/Tangerg/go-sdk/internal/mcpgodebug"
+	"github.com/Tangerg/go-sdk/internal/util"
+	"github.com/Tangerg/go-sdk/jsonrpc"
 	"github.com/yosida95/uritemplate/v3"
 )
 

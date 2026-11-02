@@ -9,8 +9,8 @@ import (
 	"fmt"
 	"maps"
 
-	internaljson "github.com/modelcontextprotocol/go-sdk/internal/json"
-	"github.com/modelcontextprotocol/go-sdk/internal/mcpgodebug"
+	internaljson "github.com/Tangerg/go-sdk/internal/json"
+	"github.com/Tangerg/go-sdk/internal/mcpgodebug"
 )
 
 // resultType indicates whether a result is complete or requires further input
@@ -381,12 +381,6 @@ func (r *CallToolResult) hasContent() bool {
 // An empty InputRequests with NeedsInput true indicates load-shedding.
 func (r *CallToolResult) NeedsInput() bool { return r.resultType == resultTypeInputRequired }
 
-// structuredcontentfloat64 is a compatibility parameter that restores the
-// previous behavior of decoding numbers in [CallToolResult.StructuredContent]
-// as float64 values. By default, numbers are decoded as [json.Number] to avoid
-// losing precision. The option will be removed in the 1.11.0 version of the SDK.
-var structuredcontentfloat64 = mcpgodebug.Value("structuredcontentfloat64")
-
 func (x *CallToolResult) MarshalJSON() ([]byte, error) {
 	type res CallToolResult // avoid recursion
 	type wire struct {
@@ -417,12 +411,12 @@ func (x *CallToolResult) UnmarshalJSON(data []byte) error {
 		return err
 	}
 	if len(wire.StructuredContent) > 0 {
-		unmarshal := internaljson.UnmarshalUseNumber
-		if structuredcontentfloat64 == "1" {
-			unmarshal = internaljson.Unmarshal
-		}
-		if err := unmarshal(wire.StructuredContent, &wire.res.StructuredContent); err != nil {
+		if err := internaljson.UnmarshalUseNumber(wire.StructuredContent, &wire.res.StructuredContent); err != nil {
 			return err
+		}
+		// A present JSON null is distinct from an omitted structured result.
+		if wire.res.StructuredContent == nil {
+			wire.res.StructuredContent = json.RawMessage("null")
 		}
 	}
 	var err error
@@ -1954,8 +1948,8 @@ type Tool struct {
 	// supports the 2020-12 draft of JSON schema. To do your own validation, use
 	// [Server.AddTool].
 	//
-	// From the client, this field will hold the default JSON marshaling of the
-	// server's input schema (a map[string]any).
+	// From the client, this field holds the decoded schema with json.Number
+	// values, preserving numeric constraints without floating-point rounding.
 	InputSchema any `json:"inputSchema"`
 	// Intended for programmatic or logical use, but used as a display name in past
 	// specs or fallback (if title isn't present).
@@ -1972,8 +1966,8 @@ type Tool struct {
 	// supports the 2020-12 draft of JSON schema. To do your own validation, use
 	// [Server.AddTool].
 	//
-	// From the client, this field will hold the default JSON marshaling of the
-	// server's output schema (a map[string]any).
+	// From the client, this field holds the decoded schema with json.Number
+	// values, preserving numeric constraints without floating-point rounding.
 	OutputSchema any `json:"outputSchema,omitempty"`
 	// Intended for UI and end-user contexts — optimized to be human-readable and
 	// easily understood, even by those unfamiliar with domain-specific terminology.
@@ -1982,6 +1976,16 @@ type Tool struct {
 	Title string `json:"title,omitempty"`
 	// Icons for the tool, if any.
 	Icons []Icon `json:"icons,omitempty"`
+}
+
+func (t *Tool) UnmarshalJSON(data []byte) error {
+	type wireTool Tool
+	var wire wireTool
+	if err := internaljson.UnmarshalUseNumber(data, &wire); err != nil {
+		return err
+	}
+	*t = Tool(wire)
+	return nil
 }
 
 // hintomitempty is a compatibility parameter that restores the pre-1.7.0
@@ -2175,8 +2179,8 @@ type ElicitParams struct {
 	// Internally, the SDK uses github.com/google/jsonschema-go for validation,
 	// which only supports the 2020-12 draft of the JSON schema spec.
 	//
-	// From the client, this field will use the default JSON marshaling (a
-	// map[string]any).
+	// From the client, this field holds the decoded schema with json.Number
+	// values, preserving numeric constraints without floating-point rounding.
 	//
 	// Only top-level properties are allowed, without nesting.
 	//
@@ -2190,6 +2194,16 @@ type ElicitParams struct {
 	//
 	// This is only used for "url" elicitation.
 	ElicitationID string `json:"elicitationId,omitempty"`
+}
+
+func (x *ElicitParams) UnmarshalJSON(data []byte) error {
+	type wireElicitParams ElicitParams
+	var wire wireElicitParams
+	if err := internaljson.UnmarshalUseNumber(data, &wire); err != nil {
+		return err
+	}
+	*x = ElicitParams(wire)
+	return nil
 }
 
 func (x *ElicitParams) isParams()       {}

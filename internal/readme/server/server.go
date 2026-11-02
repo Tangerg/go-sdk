@@ -9,7 +9,7 @@ import (
 	"context"
 	"log"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/Tangerg/go-sdk/mcp"
 )
 
 type Input struct {

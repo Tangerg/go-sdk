@@ -9,7 +9,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/Tangerg/go-sdk/mcp"
 )
 
 // createLoggingMiddleware creates an MCP middleware that logs method calls.

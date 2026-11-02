@@ -11,7 +11,7 @@ import (
 	"context"
 	"log"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/Tangerg/go-sdk/mcp"
 )
 
 func main() {

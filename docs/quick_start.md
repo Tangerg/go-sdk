@@ -7,7 +7,7 @@
 ## Installation
 
 ```
-go get github.com/modelcontextprotocol/go-sdk/mcp
+go get github.com/Tangerg/go-sdk/mcp
 ```
 
 ## Getting started
@@ -24,7 +24,7 @@ import (
 	"context"
 	"log"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/Tangerg/go-sdk/mcp"
 )
 
 type Input struct {
@@ -66,7 +66,7 @@ import (
 	"log"
 	"os/exec"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/Tangerg/go-sdk/mcp"
 )
 
 func main() {
@@ -101,5 +101,5 @@ func main() {
 }
 ```
 
-The [`examples/`](https://github.com/modelcontextprotocol/go-sdk/tree/main/examples) directory contains more example clients and
+The [`examples/`](https://github.com/Tangerg/go-sdk/tree/main/examples) directory contains more example clients and
 servers.

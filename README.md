@@ -3,8 +3,8 @@
 
 [![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/modelcontextprotocol/go-sdk)
 
-[![PkgGoDev](https://pkg.go.dev/badge/github.com/modelcontextprotocol/go-sdk)](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk)
-[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/modelcontextprotocol/go-sdk/badge)](https://scorecard.dev/viewer/?uri=github.com/modelcontextprotocol/go-sdk)
+[![PkgGoDev](https://pkg.go.dev/badge/github.com/Tangerg/go-sdk)](https://pkg.go.dev/github.com/Tangerg/go-sdk)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/Tangerg/go-sdk/badge)](https://scorecard.dev/viewer/?uri=github.com/Tangerg/go-sdk)
 
 This repository contains an implementation of the official Go software
 development kit (SDK) for the Model Context Protocol (MCP).
@@ -14,17 +14,17 @@ development kit (SDK) for the Model Context Protocol (MCP).
 The SDK consists of several importable packages:
 
 - The
-  [`github.com/modelcontextprotocol/go-sdk/mcp`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp)
+  [`github.com/Tangerg/go-sdk/mcp`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp)
   package defines the primary APIs for constructing and using MCP clients and
   servers.
 - The
-  [`github.com/modelcontextprotocol/go-sdk/jsonrpc`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/jsonrpc) package is for users implementing
+  [`github.com/Tangerg/go-sdk/jsonrpc`](https://pkg.go.dev/github.com/Tangerg/go-sdk/jsonrpc) package is for users implementing
   their own transports.
 - The
-  [`github.com/modelcontextprotocol/go-sdk/auth`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/auth)
+  [`github.com/Tangerg/go-sdk/auth`](https://pkg.go.dev/github.com/Tangerg/go-sdk/auth)
   package provides some primitives for supporting OAuth.
 - The
-  [`github.com/modelcontextprotocol/go-sdk/oauthex`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/oauthex)
+  [`github.com/Tangerg/go-sdk/oauthex`](https://pkg.go.dev/github.com/Tangerg/go-sdk/oauthex)
   package provides extensions to the OAuth protocol, such as ProtectedResourceMetadata.
 
 The SDK endeavors to implement the full MCP spec. The [`docs/`](/docs/) directory
@@ -69,7 +69,7 @@ import (
 	"context"
 	"log"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/Tangerg/go-sdk/mcp"
 )
 
 type Input struct {
@@ -111,7 +111,7 @@ import (
 	"log"
 	"os/exec"
 
-	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/Tangerg/go-sdk/mcp"
 )
 
 func main() {

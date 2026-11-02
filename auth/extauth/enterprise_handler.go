@@ -14,8 +14,8 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/modelcontextprotocol/go-sdk/auth"
-	"github.com/modelcontextprotocol/go-sdk/oauthex"
+	"github.com/Tangerg/go-sdk/auth"
+	"github.com/Tangerg/go-sdk/oauthex"
 	"golang.org/x/oauth2"
 )
 

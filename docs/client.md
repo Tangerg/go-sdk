@@ -28,17 +28,17 @@ The SDK supports this as follows:
 
 **Client-side**: The SDK client always has the `roots.listChanged` capability.
 To add roots to a client, use the
-[`Client.AddRoots`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#Client.AddRoots)
+[`Client.AddRoots`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#Client.AddRoots)
 and
-[`Client.RemoveRoots`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#Client.RemoveRoots)
+[`Client.RemoveRoots`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#Client.RemoveRoots)
 methods. If any servers are already [connected](protocol.md#lifecycle) to the
 client, a call to `AddRoot` or `RemoveRoots` will result in a
 `notifications/roots/list_changed` notification to each connected server.
 
 **Server-side**: To query roots from the server, use the
-[`ServerSession.ListRoots`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerSession.ListRoots)
+[`ServerSession.ListRoots`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ServerSession.ListRoots)
 method. To receive notifications about root changes, set
-[`ServerOptions.RootsListChangedHandler`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerOptions.RootsListChangedHandler).
+[`ServerOptions.RootsListChangedHandler`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ServerOptions.RootsListChangedHandler).
 For protocol versions `2026-07-28` and later, `ListRoots` requests are
 delivered via the
 [Multi Round-Trip Requests](#multi-round-trip-requests)
@@ -98,7 +98,7 @@ func Example_roots() {
 
 `Client.AddRoots` and `Client.RemoveRoots` notify every connected server that
 the list changed. Servers observe this through
-[`ServerOptions.RootsListChangedHandler`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerOptions.RootsListChangedHandler);
+[`ServerOptions.RootsListChangedHandler`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ServerOptions.RootsListChangedHandler);
 as with the server-side list-changed notifications, it reports only that
 something changed, so read the list back with `ServerSession.ListRoots`.
 
@@ -169,11 +169,11 @@ is a way for servers to leverage the client's AI capabilities. It is
 implemented in the SDK as follows:
 
 **Client-side**: To add the `sampling` capability to a client, set 
-[`ClientOptions.CreateMessageHandler`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientOptions.CreateMessageHandler).
+[`ClientOptions.CreateMessageHandler`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientOptions.CreateMessageHandler).
 This function is invoked whenever the server requests sampling.
 
 **Server-side**: To use sampling from the server, call
-[`ServerSession.CreateMessage`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerSession.CreateMessage).
+[`ServerSession.CreateMessage`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ServerSession.CreateMessage).
 
 For protocol versions `2026-07-28` and later, sampling requests are
 delivered via the
@@ -236,14 +236,14 @@ func Example_sampling() {
 allows servers to request user inputs. It is implemented in the SDK as follows:
 
 **Client-side**: To add the `elicitation` capability to a client, set
-[`ClientOptions.ElicitationHandler`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientOptions.ElicitationHandler).
+[`ClientOptions.ElicitationHandler`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientOptions.ElicitationHandler).
 The elicitation handler must return a result that matches the requested schema;
 otherwise, elicitation returns an error. If your handler supports [URL mode
 elicitation](https://modelcontextprotocol.io/specification/2025-11-25/client/elicitation#url-mode-elicitation-requests),
 you must declare that capability explicitly (see [Capabilities](#capabilities))
 
 **Server-side**: To use elicitation from the server, call
-[`ServerSession.Elicit`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerSession.Elicit).
+[`ServerSession.Elicit`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ServerSession.Elicit).
 
 For protocol versions `2026-07-28` and later, elicitation requests are
 delivered via the
@@ -381,14 +381,14 @@ func Example_elicitationSchema() {
 In URL mode the user finishes out of band, in a browser, so nothing in the
 elicitation result tells the client when they are done. The server signals that
 with
-[`ServerSession.NotifyElicitationComplete`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ServerSession.NotifyElicitationComplete),
+[`ServerSession.NotifyElicitationComplete`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ServerSession.NotifyElicitationComplete),
 passing the same `ElicitationID` the request carried; the client observes it
 through
-[`ClientOptions.ElicitationCompleteHandler`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientOptions.ElicitationCompleteHandler).
+[`ClientOptions.ElicitationCompleteHandler`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientOptions.ElicitationCompleteHandler).
 Send it from whatever endpoint the hosted flow redirects back to.
 
 The notification matters most when a handler rejects a request with
-[`URLElicitationRequiredError`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#URLElicitationRequiredError):
+[`URLElicitationRequiredError`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#URLElicitationRequiredError):
 the client parks the original request until a notification names that
 `ElicitationID`, and then retries it automatically. Until one arrives, the
 client waits.
@@ -468,7 +468,7 @@ default. The middleware:
    result no longer needs input.
 
 The middleware is enabled by default. To opt out, set
-[`ClientOptions.MultiRoundTrip.Disabled = true`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#MultiRoundTripOptions);
+[`ClientOptions.MultiRoundTrip.Disabled = true`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#MultiRoundTripOptions);
 the client will then surface input-required results directly to the caller
 (the returned `CallToolResult`, `GetPromptResult`, or `ReadResourceResult`
 will report `NeedsInput() == true` and expose the server's `InputRequests`
@@ -503,14 +503,14 @@ or both modes, [configure `Capabilities.Elicitation`
 explicitly](#explicit-capabilities).
 
 See the [`ClientCapabilities`
-documentation](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientCapabilities)
+documentation](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientCapabilities)
 for further details on inference.
 
 ### Explicit capabilities
 
 To explicitly declare capabilities, or to override the [default inferred
 capability](#capability-inference), set
-[`ClientOptions.Capabilities`](https://pkg.go.dev/github.com/modelcontextprotocol/go-sdk/mcp#ClientOptions.Capabilities).
+[`ClientOptions.Capabilities`](https://pkg.go.dev/github.com/Tangerg/go-sdk/mcp#ClientOptions.Capabilities).
 This sets the initial client capabilities, before any capabilities are added
 based on configured handlers. If a capability is already present in
 `Capabilities`, adding a handler will not change its configuration.

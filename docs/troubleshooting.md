@@ -10,7 +10,7 @@ collect information that will be useful in debugging. Please try to provide
 this information in a bug report, so that maintainers can more quickly
 understand what's going wrong.
 
-And most of all, please do [file bugs](https://github.com/modelcontextprotocol/go-sdk/issues/new?template=bug_report.md).
+And most of all, please do [file bugs](https://github.com/Tangerg/go-sdk/issues/new?template=bug_report.md).
 
 ## Using the MCP inspector
 

@@ -5,7 +5,7 @@
 ## Installation
 
 ```
-go get github.com/modelcontextprotocol/go-sdk/mcp
+go get github.com/Tangerg/go-sdk/mcp
 ```
 
 ## Getting started
@@ -23,5 +23,5 @@ stdin/stdout:
 
 %include ../readme/client/client.go -
 
-The [`examples/`](https://github.com/modelcontextprotocol/go-sdk/tree/main/examples) directory contains more example clients and
+The [`examples/`](https://github.com/Tangerg/go-sdk/tree/main/examples) directory contains more example clients and
 servers.

@@ -16,10 +16,10 @@ import (
 	"sync"
 	"time"
 
-	internaljson "github.com/modelcontextprotocol/go-sdk/internal/json"
-	"github.com/modelcontextprotocol/go-sdk/internal/jsonrpc2"
-	"github.com/modelcontextprotocol/go-sdk/internal/mcpgodebug"
-	"github.com/modelcontextprotocol/go-sdk/jsonrpc"
+	internaljson "github.com/Tangerg/go-sdk/internal/json"
+	"github.com/Tangerg/go-sdk/internal/jsonrpc2"
+	"github.com/Tangerg/go-sdk/internal/mcpgodebug"
+	"github.com/Tangerg/go-sdk/jsonrpc"
 )
 
 // notifyCancellationTimeout bounds the cancellation notification we send to
