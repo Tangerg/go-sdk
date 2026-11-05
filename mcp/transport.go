@@ -119,16 +119,18 @@ type serverConnection interface {
 	sessionUpdated(ServerSessionState)
 }
 
-// DefaultMaxLineLength is the default maximum number of bytes buffered while
-// decoding a single inbound JSON-RPC frame.
+// DefaultMaxLineLength is the default maximum size of a single inbound
+// JSON-RPC frame.
 const DefaultMaxLineLength = 16 * 1024 * 1024
 
 // A StdioTransport is a [Transport] that communicates over stdin/stdout using
 // newline-delimited JSON.
 type StdioTransport struct {
-	// MaxLineLength bounds the number of bytes that may be buffered while
-	// decoding a single inbound JSON-RPC frame. A value of 0 selects [DefaultMaxLineLength],
-	// a negative value disables the cap.
+	// MaxLineLength bounds the size of each inbound JSON-RPC frame: the bytes
+	// from the end of the previous message, including its line terminator and
+	// any whitespace, through the end of this one. The decision does not depend
+	// on how the reader splits its input. A value of 0 selects
+	// [DefaultMaxLineLength], a negative value disables the cap.
 	MaxLineLength int
 }
 
@@ -149,9 +151,11 @@ func (nopCloserWriter) Close() error { return nil }
 type IOTransport struct {
 	Reader io.ReadCloser
 	Writer io.WriteCloser
-	// MaxLineLength bounds the number of bytes that may be buffered while
-	// decoding a single inbound JSON-RPC frame. A value of 0 selects [DefaultMaxLineLength],
-	// a negative value disables the cap.
+	// MaxLineLength bounds the size of each inbound JSON-RPC frame: the bytes
+	// from the end of the previous message, including its line terminator and
+	// any whitespace, through the end of this one. The decision does not depend
+	// on how the reader splits its input. A value of 0 selects
+	// [DefaultMaxLineLength], a negative value disables the cap.
 	MaxLineLength int
 }
 
@@ -484,7 +488,9 @@ type ioConn struct {
 	sessionMu       sync.Mutex
 	protocolVersion string
 
-	writeMu sync.Mutex         // guards Write, which must be concurrency safe.
+	// sending is a one-slot send queue. Its holder alone writes rwc and
+	// outgoingBatch; waiting for it is cancelable, unlike a mutex.
+	sending chan struct{}
 	rwc     io.ReadWriteCloser // the underlying stream
 
 	// incoming receives messages from the read loop started in [newIOConn].
@@ -541,7 +547,7 @@ func newIOConnLimited(rwc io.ReadWriteCloser, maxLineLength int) *ioConn {
 			limiter *frameLimitReader
 		)
 		if limit > 0 {
-			limiter = &frameLimitReader{r: rwc, limit: limit}
+			limiter = &frameLimitReader{r: rwc, limit: int64(limit)}
 			reader = limiter
 		}
 		dec := json.NewDecoder(reader)
@@ -571,11 +577,12 @@ func newIOConnLimited(rwc io.ReadWriteCloser, maxLineLength int) *ioConn {
 				return
 			}
 			if limiter != nil {
-				limiter.resetFrame()
+				limiter.beginFrame(dec.InputOffset())
 			}
 		}
 	}()
 	return &ioConn{
+		sending:  make(chan struct{}, 1),
 		rwc:      rwc,
 		incoming: incoming,
 		closed:   closed,
@@ -586,27 +593,32 @@ func newIOConnLimited(rwc io.ReadWriteCloser, maxLineLength int) *ioConn {
 // limit before the value was completely received.
 var errFrameTooLarge = errors.New("inbound JSON-RPC frame exceeded the configured maximum line length")
 
-// frameLimitReader bounds the number of bytes [json.Decoder] may buffer while
-// decoding a single JSON value. Read returns [errFrameTooLarge] once the budget is exhausted.
+// frameLimitReader bounds the bytes [json.Decoder] may buffer for the frame it
+// is decoding. The decoder reads ahead, so bytes of the next frame may already
+// be buffered when a frame ends; they are charged to that next frame, which
+// begins at the decoder's input offset. Read returns [errFrameTooLarge] once the
+// current frame has used its whole budget.
 type frameLimitReader struct {
 	r     io.Reader
-	limit int
-	count int
+	limit int64
+	read  int64 // stream offset of the next byte r will return
+	start int64 // stream offset at which the current frame begins
 }
 
 func (r *frameLimitReader) Read(p []byte) (int, error) {
-	if r.count >= r.limit {
+	remaining := r.limit - (r.read - r.start)
+	if remaining <= 0 {
 		return 0, errFrameTooLarge
 	}
-	if len(p) > r.limit-r.count {
-		p = p[:r.limit-r.count]
+	if int64(len(p)) > remaining {
+		p = p[:remaining]
 	}
 	n, err := r.r.Read(p)
-	r.count += n
+	r.read += int64(n)
 	return n, err
 }
 
-func (r *frameLimitReader) resetFrame() { r.count = 0 }
+func (r *frameLimitReader) beginFrame(offset int64) { r.start = offset }
 
 func (c *ioConn) SessionID() string { return "" }
 
@@ -781,15 +793,17 @@ func readBatch(data []byte) (msgs []jsonrpc.Message, isBatch bool, _ error) {
 }
 
 func (t *ioConn) Write(ctx context.Context, msg jsonrpc.Message) error {
-	// As in [ioConn.Read], enforce that Writes on a closed context are an error.
+	// A message still waiting for the stream leaves the queue without being
+	// sent, and its cancellation does not disturb the sender ahead of it.
 	select {
+	case t.sending <- struct{}{}:
 	case <-ctx.Done():
 		return ctx.Err()
-	default:
 	}
-
-	t.writeMu.Lock()
-	defer t.writeMu.Unlock()
+	defer func() { <-t.sending }()
+	if err := ctx.Err(); err != nil {
+		return err
+	}
 
 	// Batching support: if msg is a Response, it may have completed a batch, so
 	// check that first. Otherwise, it is a request or notification, and we may
@@ -802,9 +816,7 @@ func (t *ioConn) Write(ctx context.Context, msg jsonrpc.Message) error {
 				if err != nil {
 					return err
 				}
-				data = append(data, '\n')
-				_, err = t.rwc.Write(data)
-				return err
+				return t.send(ctx, append(data, '\n'))
 			}
 			return nil
 		}
@@ -816,9 +828,7 @@ func (t *ioConn) Write(ctx context.Context, msg jsonrpc.Message) error {
 			if err != nil {
 				return err
 			}
-			data = append(data, '\n')
-			_, err = t.rwc.Write(data)
-			return err
+			return t.send(ctx, append(data, '\n'))
 		}
 		return nil
 	}
@@ -826,8 +836,20 @@ func (t *ioConn) Write(ctx context.Context, msg jsonrpc.Message) error {
 	if err != nil {
 		return fmt.Errorf("marshaling message: %v", err)
 	}
-	data = append(data, '\n') // newline delimited
-	_, err = t.rwc.Write(data)
+	return t.send(ctx, append(data, '\n')) // newline delimited
+}
+
+// send writes one complete frame. Bytes already handed to the stream cannot be
+// withdrawn, and a partially written frame would corrupt every later one, so
+// canceling ctx mid-write closes the connection. That interrupts the write only
+// if closing rwc unblocks it; the caller then still learns that the peer may
+// have received some or all of the frame.
+func (t *ioConn) send(ctx context.Context, data []byte) error {
+	interrupt := context.AfterFunc(ctx, func() { _ = t.Close() })
+	_, err := t.rwc.Write(data)
+	if !interrupt() {
+		return errors.Join(ctx.Err(), err)
+	}
 	return err
 }
 
