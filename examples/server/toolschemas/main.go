@@ -13,8 +13,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/Tangerg/go-sdk/mcp"
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
 // Input is the input into all the tools handlers below.

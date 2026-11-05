@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/Tangerg/go-sdk/mcp"
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
 // !+roots

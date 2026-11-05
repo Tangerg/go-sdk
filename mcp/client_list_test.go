@@ -11,10 +11,10 @@ import (
 	"log"
 	"testing"
 
+	"github.com/Tangerg/go-sdk/mcp"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/google/jsonschema-go/jsonschema"
-	"github.com/Tangerg/go-sdk/mcp"
 )
 
 func TestList(t *testing.T) {

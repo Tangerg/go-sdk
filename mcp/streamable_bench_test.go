@@ -16,8 +16,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/Tangerg/go-sdk/mcp"
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
 func BenchmarkStreamableServing(b *testing.B) {

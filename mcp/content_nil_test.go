@@ -14,9 +14,9 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/Tangerg/go-sdk/mcp"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"github.com/Tangerg/go-sdk/mcp"
 )
 
 func TestContentUnmarshalNil(t *testing.T) {

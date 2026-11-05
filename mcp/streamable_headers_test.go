@@ -13,8 +13,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/Tangerg/go-sdk/jsonrpc"
+	"github.com/google/jsonschema-go/jsonschema"
 )
 
 func TestExtractName(t *testing.T) {
@@ -1594,6 +1594,85 @@ func TestValidateParamHeaders_NestedArguments(t *testing.T) {
 	}
 }
 
+// TestValidateParamHeaders_EmptyString verifies that an empty string
+// parameter, which the client mirrors as a present but empty header, is told
+// apart from a header that was not sent at all.
+func TestValidateParamHeaders_EmptyString(t *testing.T) {
+	tool := &Tool{
+		Name: "test",
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"region": map[string]any{"type": "string", "x-mcp-header": "Region"},
+			},
+		},
+	}
+	tests := []struct {
+		name    string
+		header  []string // values of Mcp-Param-Region; nil means not sent
+		args    map[string]any
+		wantErr string // substring of the expected error; empty means none
+	}{
+		{"empty string with empty header", []string{""}, map[string]any{"region": ""}, ""},
+		{"empty string without header", nil, map[string]any{"region": ""}, "missing"},
+		{"empty string with non-empty header", []string{"us-west1"}, map[string]any{"region": ""}, "does not match"},
+		{"absent parameter with empty header", []string{""}, map[string]any{}, "unexpected"},
+		{"null parameter with empty header", []string{""}, map[string]any{"region": nil}, "unexpected"},
+		{"absent parameter without header", nil, map[string]any{}, ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			header := http.Header{}
+			for _, v := range tt.header {
+				header.Add(paramHeaderPrefix+"Region", v)
+			}
+			msg := &jsonrpc.Request{
+				Method: "tools/call",
+				Params: mustMarshal(&CallToolParams{Name: "test", Arguments: tt.args}),
+			}
+			err := validateParamHeaders(header, msg, tool)
+			if tt.wantErr == "" {
+				if err != nil {
+					t.Errorf("validateParamHeaders() = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tt.wantErr) {
+				t.Errorf("validateParamHeaders() = %v, want error containing %q", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// TestParamHeaderEmptyStringRoundTrip verifies that the server accepts the
+// present but empty Mcp-Param header the client sends for an empty string.
+func TestParamHeaderEmptyStringRoundTrip(t *testing.T) {
+	tool := &Tool{
+		Name: "test",
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"region": map[string]any{"type": "string", "x-mcp-header": "Region"},
+			},
+		},
+	}
+	msg := &jsonrpc.Request{
+		Method: "tools/call",
+		Params: mustMarshal(&CallToolParams{Name: "test", Arguments: map[string]any{"region": ""}}),
+	}
+	header := http.Header{}
+	header.Set(protocolVersionHeader, minVersionForStandardHeaders)
+	setStandardHeaders(context.WithValue(context.Background(), toolContextKey, tool), header, msg)
+
+	if got := header.Values(paramHeaderPrefix + "Region"); len(got) != 1 || got[0] != "" {
+		t.Fatalf("Mcp-Param-Region = %q, want one empty value", got)
+	}
+	lookup := func(string) (*serverTool, bool) { return &serverTool{tool: tool}, true }
+	if err := validateMcpHeaders(header, msg, lookup); err != nil {
+		t.Errorf("validateMcpHeaders() on client-generated headers = %v, want nil", err)
+	}
+}
+
 // TestMcpNameHeaderEncodingRoundTrip verifies that a name which is not
 // header-safe is Base64-wrapped by the client per the 2026-07-28 transport
 // spec, and that the server's validation accepts what the client produced.
@@ -1628,6 +1707,11 @@ func TestMcpNameHeaderEncodingRoundTrip(t *testing.T) {
 			msg:        &jsonrpc.Request{Method: "tools/call", Params: mustMarshal(&CallToolParams{Name: "=?base64?abc?="})},
 			wantHeader: encodeBase64("=?base64?abc?="),
 		},
+		{
+			name:       "empty prompt name is sent as an empty header",
+			msg:        &jsonrpc.Request{Method: "prompts/get", Params: mustMarshal(&GetPromptParams{Name: ""})},
+			wantHeader: "",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1636,13 +1720,184 @@ func TestMcpNameHeaderEncodingRoundTrip(t *testing.T) {
 			header.Set(protocolVersionHeader, minVersionForStandardHeaders)
 			setStandardHeaders(context.Background(), header, tt.msg)
 
-			if got := header.Get(nameHeader); got != tt.wantHeader {
-				t.Errorf("Mcp-Name = %q, want %q", got, tt.wantHeader)
+			if got := header.Values(nameHeader); len(got) != 1 || got[0] != tt.wantHeader {
+				t.Errorf("Mcp-Name = %q, want [%q]", got, tt.wantHeader)
 			}
 
 			// The server must accept the headers the client just generated.
 			if err := validateMcpHeaders(header, tt.msg, nil); err != nil {
 				t.Errorf("validateMcpHeaders() on client-generated headers = %v, want nil", err)
+			}
+		})
+	}
+}
+
+// TestParamHeaderAnnotationsWithNonStringTypes verifies that a type array or a
+// boolean schema elsewhere in the input schema does not cause x-mcp-header
+// annotations to be ignored.
+func TestParamHeaderAnnotationsWithNonStringTypes(t *testing.T) {
+	type typedInput struct {
+		Region string  `json:"region"`
+		Note   *string `json:"note,omitempty"`
+	}
+	typed, err := jsonschema.For[typedInput](nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	typed.Properties["region"].Extra = map[string]any{"x-mcp-header": "Region"}
+
+	tests := []struct {
+		name   string
+		schema any
+	}{
+		{"jsonschema.For with pointer field", typed},
+		{
+			"type array on sibling property",
+			map[string]any{
+				"type": "object",
+				"properties": map[string]any{
+					"region": map[string]any{"type": "string", "x-mcp-header": "Region"},
+					"note":   map[string]any{"type": []any{"null", "string"}},
+				},
+			},
+		},
+		{
+			"type array on parent object",
+			json.RawMessage(`{"type":["object","null"],"properties":{"region":{"type":"string","x-mcp-header":"Region"}}}`),
+		},
+		{
+			"boolean schema on sibling property",
+			json.RawMessage(`{"type":"object","properties":{"region":{"type":"string","x-mcp-header":"Region"},"any":true,"none":false}}`),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tool := &Tool{Name: "query", InputSchema: tt.schema}
+			if err := validateParamHeaderAnnotations(tool); err != nil {
+				t.Fatalf("validateParamHeaderAnnotations() = %v, want nil", err)
+			}
+			got := extractParamHeaderAnnotations(tool)
+			if len(got) != 1 || strings.Join(got[0].Path, ".") != "region" || got[0].Header != "Region" {
+				t.Fatalf("extractParamHeaderAnnotations() = %v, want [{[region] Region}]", got)
+			}
+
+			params := mustMarshal(&CallToolParams{Name: "query", Arguments: map[string]any{"region": "us-west1"}})
+			if got := generateParamHeaders(tool, params); got[paramHeaderPrefix+"Region"] != "us-west1" {
+				t.Errorf("generateParamHeaders() = %v, want Mcp-Param-Region: us-west1", got)
+			}
+
+			msg := &jsonrpc.Request{Method: "tools/call", Params: params}
+			mismatch := http.Header{}
+			mismatch.Set(paramHeaderPrefix+"Region", "eu-west1")
+			if err := validateParamHeaders(mismatch, msg, tool); err == nil {
+				t.Error("validateParamHeaders() with mismatched header = nil, want error")
+			}
+			if err := validateParamHeaders(http.Header{}, msg, tool); err == nil {
+				t.Error("validateParamHeaders() with missing header = nil, want error")
+			}
+		})
+	}
+}
+
+func TestValidateParamHeaderAnnotationsTypeArray(t *testing.T) {
+	tests := []struct {
+		name       string
+		schema     string
+		wantErrSub string
+	}{
+		{
+			name:       "type array on annotated property",
+			schema:     `{"type":"object","properties":{"region":{"type":["null","string"],"x-mcp-header":"Region"}}}`,
+			wantErrSub: `got ["null","string"]`,
+		},
+		{
+			name:       "missing type on annotated property",
+			schema:     `{"type":"object","properties":{"region":{"x-mcp-header":"Region"}}}`,
+			wantErrSub: `got ""`,
+		},
+		{
+			name:       "invalid annotation next to type array",
+			schema:     `{"type":"object","properties":{"region":{"type":"string","x-mcp-header":"My Region"},"note":{"type":["null","string"]}}}`,
+			wantErrSub: "invalid character",
+		},
+		{
+			name:       "invalid annotation next to boolean schema",
+			schema:     `{"type":"object","properties":{"region":{"type":"string","x-mcp-header":"My Region"},"any":true}}`,
+			wantErrSub: "invalid character",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateParamHeaderAnnotations(&Tool{Name: "query", InputSchema: json.RawMessage(tt.schema)})
+			if err == nil {
+				t.Fatalf("validateParamHeaderAnnotations() = nil, want error containing %q", tt.wantErrSub)
+			}
+			if !strings.Contains(err.Error(), tt.wantErrSub) {
+				t.Errorf("validateParamHeaderAnnotations() = %q, want substring %q", err, tt.wantErrSub)
+			}
+		})
+	}
+}
+
+// TestValidateMcpHeadersRepeated verifies that the headers mirrored for
+// intermediaries are rejected when sent more than once, regardless of which
+// copy matches the body.
+func TestValidateMcpHeadersRepeated(t *testing.T) {
+	tool := &Tool{
+		Name: "query",
+		InputSchema: map[string]any{
+			"type": "object",
+			"properties": map[string]any{
+				"region": map[string]any{"type": "string", "x-mcp-header": "Region"},
+			},
+		},
+	}
+	lookup := func(name string) (*serverTool, bool) {
+		if name == tool.Name {
+			return &serverTool{tool: tool}, true
+		}
+		return nil, false
+	}
+	msg := &jsonrpc.Request{
+		Method: "tools/call",
+		Params: mustMarshal(&CallToolParams{Name: "query", Arguments: map[string]any{"region": "us-west1"}}),
+	}
+	validHeader := func() http.Header {
+		h := http.Header{}
+		h.Set(protocolVersionHeader, minVersionForStandardHeaders)
+		h.Set(methodHeader, "tools/call")
+		h.Set(nameHeader, "query")
+		h.Set(paramHeaderPrefix+"Region", "us-west1")
+		return h
+	}
+	if err := validateMcpHeaders(validHeader(), msg, lookup); err != nil {
+		t.Fatalf("validateMcpHeaders() with single headers = %v, want nil", err)
+	}
+
+	tests := []struct {
+		header string
+		extra  []string
+	}{
+		{protocolVersionHeader, []string{minVersionForStandardHeaders}},
+		{protocolVersionHeader, []string{protocolVersion20251125}},
+		{methodHeader, []string{"tools/call"}},
+		{nameHeader, []string{"query"}},
+		{nameHeader, []string{"other-tool"}},
+		{paramHeaderPrefix + "Region", []string{"us-west1"}},
+		{paramHeaderPrefix + "Region", []string{"eu-west1"}},
+	}
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%s=%v", tt.header, tt.extra), func(t *testing.T) {
+			h := validHeader()
+			for _, v := range tt.extra {
+				h.Add(tt.header, v)
+			}
+			err := validateMcpHeaders(h, msg, lookup)
+			if err == nil {
+				t.Fatal("validateMcpHeaders() = nil, want error for repeated header")
+			}
+			if want := "must not be repeated"; !strings.Contains(err.Error(), want) {
+				t.Errorf("validateMcpHeaders() = %q, want substring %q", err, want)
 			}
 		})
 	}

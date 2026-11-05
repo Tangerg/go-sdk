@@ -22,9 +22,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/Tangerg/go-sdk/jsonrpc"
 	"github.com/Tangerg/go-sdk/mcp"
+	"github.com/google/jsonschema-go/jsonschema"
 	"github.com/yosida95/uritemplate/v3"
 )
 
@@ -555,7 +555,6 @@ func testElicitationEnumsHandler(ctx context.Context, req *mcp.CallToolRequest, 
 					"minItems": 1,
 					"maxItems": 3,
 					"items": map[string]any{
-						"type": "string",
 						"anyOf": []map[string]any{
 							{"const": "value1", "title": "First Option"},
 							{"const": "value2", "title": "Second Option"},
