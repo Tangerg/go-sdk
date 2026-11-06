@@ -119,18 +119,16 @@ type serverConnection interface {
 	serverSessionUpdated(ServerSessionState)
 }
 
-// DefaultMaxLineLength is the default maximum size of a single inbound
-// JSON-RPC frame.
+// DefaultMaxLineLength is the default maximum number of bytes buffered while
+// decoding a single inbound JSON-RPC frame.
 const DefaultMaxLineLength = 16 * 1024 * 1024
 
 // A StdioTransport is a [Transport] that communicates over stdin/stdout using
 // newline-delimited JSON.
 type StdioTransport struct {
-	// MaxLineLength bounds the size of each inbound JSON-RPC frame: the bytes
-	// from the end of the previous message, including its line terminator and
-	// any whitespace, through the end of this one. The decision does not depend
-	// on how the reader splits its input. A value of 0 selects
-	// [DefaultMaxLineLength], a negative value disables the cap.
+	// MaxLineLength bounds the number of bytes that may be buffered while
+	// decoding a single inbound JSON-RPC frame. A value of 0 selects [DefaultMaxLineLength],
+	// a negative value disables the cap.
 	MaxLineLength int
 }
 
@@ -151,11 +149,9 @@ func (nopCloserWriter) Close() error { return nil }
 type IOTransport struct {
 	Reader io.ReadCloser
 	Writer io.WriteCloser
-	// MaxLineLength bounds the size of each inbound JSON-RPC frame: the bytes
-	// from the end of the previous message, including its line terminator and
-	// any whitespace, through the end of this one. The decision does not depend
-	// on how the reader splits its input. A value of 0 selects
-	// [DefaultMaxLineLength], a negative value disables the cap.
+	// MaxLineLength bounds the number of bytes that may be buffered while
+	// decoding a single inbound JSON-RPC frame. A value of 0 selects [DefaultMaxLineLength],
+	// a negative value disables the cap.
 	MaxLineLength int
 }
 
@@ -551,9 +547,10 @@ type ioConn struct {
 	protocolVersion string
 	dropped         map[jsonrpc2.ID]bool // lazily allocated
 
-	// sending is a one-slot send queue. Its holder alone writes rwc and
-	// outgoingBatch; waiting for it is cancelable, unlike a mutex.
-	sending chan struct{}
+	// writeMu is a 1-element semaphore guarding Write, which must be
+	// concurrency safe. Send to it to lock and receive from it to unlock.
+	// Unlike a sync.Mutex, waiting for it can stop when the context is done.
+	writeMu chan struct{}
 	rwc     io.ReadWriteCloser // the underlying stream
 
 	// incoming receives messages from the read loop started in [newIOConn].
@@ -645,7 +642,7 @@ func newIOConnLimited(rwc io.ReadWriteCloser, maxLineLength int) *ioConn {
 		}
 	}()
 	return &ioConn{
-		sending:  make(chan struct{}, 1),
+		writeMu:  make(chan struct{}, 1),
 		rwc:      rwc,
 		incoming: incoming,
 		closed:   closed,
@@ -656,16 +653,17 @@ func newIOConnLimited(rwc io.ReadWriteCloser, maxLineLength int) *ioConn {
 // limit before the value was completely received.
 var errFrameTooLarge = errors.New("inbound JSON-RPC frame exceeded the configured maximum line length")
 
-// frameLimitReader bounds the bytes [json.Decoder] may buffer for the frame it
-// is decoding. The decoder reads ahead, so bytes of the next frame may already
-// be buffered when a frame ends; they are charged to that next frame, which
-// begins at the decoder's input offset. Read returns [errFrameTooLarge] once the
-// current frame has used its whole budget.
+// frameLimitReader bounds the number of bytes [json.Decoder] may buffer while
+// decoding a single JSON value. Read returns [errFrameTooLarge] once the budget is exhausted.
+//
+// The decoder reads ahead, so when it finishes a value it may already hold
+// bytes of the next one. Those bytes belong to the next frame's budget, which
+// therefore starts at the decoder's input offset rather than at the reader's.
 type frameLimitReader struct {
 	r     io.Reader
 	limit int64
-	read  int64 // stream offset of the next byte r will return
-	start int64 // stream offset at which the current frame begins
+	read  int64 // bytes read from r
+	start int64 // offset in r of the current frame
 }
 
 func (r *frameLimitReader) Read(p []byte) (int, error) {
@@ -681,6 +679,7 @@ func (r *frameLimitReader) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// beginFrame starts the budget of a frame that begins at offset in r.
 func (r *frameLimitReader) beginFrame(offset int64) { r.start = offset }
 
 func (c *ioConn) SessionID() string { return "" }
@@ -881,14 +880,22 @@ func readBatch(data []byte) (msgs []jsonrpc.Message, isBatch bool, _ error) {
 }
 
 func (t *ioConn) Write(ctx context.Context, msg jsonrpc.Message) error {
-	// A message still waiting for the stream leaves the queue without being
-	// sent, and its cancellation does not disturb the sender ahead of it.
+	// As in [ioConn.Read], enforce that Writes on a closed context are an error.
 	select {
-	case t.sending <- struct{}{}:
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
+	select {
+	case t.writeMu <- struct{}{}:
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	defer func() { <-t.sending }()
+	defer func() { <-t.writeMu }()
+	// The context may have ended while this write waited for its turn. It must
+	// not start then, since [ioConn.send] closes the connection when the context
+	// ends during a write.
 	if err := ctx.Err(); err != nil {
 		return err
 	}

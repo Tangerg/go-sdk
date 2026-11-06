@@ -13,11 +13,10 @@ import (
 	"io"
 	"log/slog"
 	"net"
-	"os"
 	"strings"
 	"sync"
 	"testing"
-	"testing/iotest"
+	"testing/synctest"
 	"time"
 
 	"github.com/Tangerg/go-sdk/internal/jsonrpc2"
@@ -595,148 +594,119 @@ func TestIOConnFrameCap(t *testing.T) {
 	}
 }
 
-// TestIOConnFrameCapIgnoresReadBoundaries checks that a frame's admission
-// depends only on its own bytes, not on what the decoder read ahead while
-// finishing the previous frame or on how the reader splits the stream.
+// TestIOConnFrameCapIgnoresReadBoundaries checks that whether a message fits
+// within the frame cap depends only on the message, not on how the reader
+// splits the stream or on what the decoder read ahead while decoding the
+// message before it.
 func TestIOConnFrameCapIgnoresReadBoundaries(t *testing.T) {
 	const limit = 128
-	small := `{"jsonrpc":"2.0","method":"a"}` + "\n"
-	// sized returns a frame whose bytes after the previous message, its leading
-	// newline included, total n.
-	sized := func(n int) string {
-		prefix := `{"jsonrpc":"2.0","method":"b","params":{"data":"`
-		return prefix + strings.Repeat("x", n-len(prefix)-len(`"}}`)-1) + `"}}` + "\n"
-	}
+	chunks := []int{1, 2, 3, 7, 64, limit - 1, limit, limit + 1, 1 << 16}
 	tests := []struct {
-		name     string
-		input    string
-		accepted int
+		name   string
+		frames []capFrame
 	}{
-		{"oversized alone", sized(150), 0},
-		{"oversized after small", small + sized(150), 1},
-		{"exact budget after small", small + sized(limit), 2},
-		{"one byte over budget after small", small + sized(limit+1), 1},
-		{"budget is per frame", small + sized(limit) + sized(limit) + sized(limit), 4},
-	}
-	readers := map[string]func(string) io.Reader{
-		"whole":    func(s string) io.Reader { return strings.NewReader(s) },
-		"one byte": func(s string) io.Reader { return iotest.OneByteReader(strings.NewReader(s)) },
-		"half":     func(s string) io.Reader { return iotest.HalfReader(strings.NewReader(s)) },
+		{"first message at the cap", []capFrame{{"", limit}}},
+		{"first message over the cap", []capFrame{{"", limit + 1}}},
+		{"message at the cap after a short one", []capFrame{{"", 50}, {"\n", limit}}},
+		{"message over the cap after a short one", []capFrame{{"", 50}, {"\n", limit + 1}}},
+		{"CRLF counts toward the next message", []capFrame{{"", 50}, {"\r\n", limit}, {"\r\n", limit + 1}}},
+		{"blank lines count toward the next message", []capFrame{{"", 50}, {"\n\n\n", limit}, {"\n\n", limit + 1}}},
+		{"each message has the whole cap", []capFrame{{"", limit}, {"\n", limit}, {"\n", limit}, {"\n", limit}}},
+		{"short messages then one over the cap", []capFrame{{"", 50}, {"\n", 50}, {"\n", 50}, {"\n", limit + 1}}},
 	}
 	for _, tt := range tests {
-		for name, reader := range readers {
-			t.Run(tt.name+"/"+name, func(t *testing.T) {
-				tr := newIOConnLimited(rwc{rc: io.NopCloser(reader(tt.input))}, limit)
-				t.Cleanup(func() { tr.Close() })
-				for i := range tt.accepted {
-					if _, err := tr.Read(context.Background()); err != nil {
-						t.Fatalf("Read() #%d error = %v, want a message", i, err)
-					}
-				}
-				_, err := tr.Read(context.Background())
-				if tt.accepted < strings.Count(tt.input, "\n") {
-					if !errors.Is(err, errFrameTooLarge) {
-						t.Fatalf("Read() after %d messages error = %v, want errFrameTooLarge", tt.accepted, err)
-					}
-				} else if !errors.Is(err, io.EOF) {
-					t.Fatalf("Read() at end of input error = %v, want io.EOF", err)
-				}
-			})
-		}
+		t.Run(tt.name, func(t *testing.T) {
+			checkFrameCap(t, limit, tt.frames, chunks)
+		})
 	}
 }
 
-// writeObserver reports when the connection starts writing to its peer.
-type writeObserver struct {
-	net.Conn
-	once    sync.Once
-	writing chan struct{}
-}
-
-func (w *writeObserver) Write(p []byte) (int, error) {
-	w.once.Do(func() { close(w.writing) })
-	return w.Conn.Write(p)
-}
-
-func observedPipe(t *testing.T) (*ioConn, *writeObserver, net.Conn) {
-	t.Helper()
-	local, peer := net.Pipe()
-	observed := &writeObserver{Conn: local, writing: make(chan struct{})}
-	conn := newIOConn(observed)
-	t.Cleanup(func() {
-		conn.Close()
-		peer.Close()
+func FuzzIOConnFrameCap(f *testing.F) {
+	f.Add(uint8(64), uint8(0), []byte{0, 1, 2, 3})
+	f.Add(uint8(0), uint8(63), []byte{4, 255, 17, 200, 9})
+	f.Add(uint8(255), uint8(255), []byte{252, 253, 254, 255})
+	f.Fuzz(func(t *testing.T, limitByte, chunkByte uint8, layout []byte) {
+		const maxFrames = 16
+		if len(layout) > maxFrames {
+			layout = layout[:maxFrames]
+		}
+		separators := []string{"\n", "\r\n", "\n\n", "\r\n\r\n"}
+		frames := make([]capFrame, len(layout))
+		for i, b := range layout {
+			sep := separators[b%4]
+			if i == 0 {
+				sep = ""
+			}
+			frames[i] = capFrame{sep, len(sep) + len(capMessage("")) + 5*int(b/4)}
+		}
+		checkFrameCap(t, 64+int(limitByte), frames, []int{1, 1 + int(chunkByte), 1 << 16})
 	})
-	return conn, observed, peer
 }
 
-// TestIOConnCanceledQueuedWriteIsNeverSent checks that a message canceled while
-// waiting behind a blocked sender returns promptly, never reaches the peer, and
-// leaves the sender ahead of it intact.
-func TestIOConnCanceledQueuedWriteIsNeverSent(t *testing.T) {
-	conn, observed, peer := observedPipe(t)
-	first := make(chan error, 1)
-	go func() {
-		first <- conn.Write(context.Background(), &jsonrpc.Request{ID: jsonrpc2.Int64ID(1), Method: "first"})
-	}()
-	<-observed.writing
+// A capFrame describes a message in a stream given to the frame cap.
+type capFrame struct {
+	sep  string // line terminators before the message
+	size int    // bytes the cap counts: len(sep) plus the message
+}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	queued := make(chan error, 1)
-	go func() {
-		queued <- conn.Write(ctx, &jsonrpc.Request{ID: jsonrpc2.Int64ID(2), Method: "canceled"})
-	}()
-	time.Sleep(20 * time.Millisecond) // let the second message reach the queue
-	cancel()
-	select {
-	case err := <-queued:
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("queued Write() = %v, want context.Canceled", err)
+// capMessage returns a JSON-RPC notification carrying pad.
+func capMessage(pad string) string {
+	return `{"jsonrpc":"2.0","method":"m","params":{"p":"` + pad + `"}}`
+}
+
+// checkFrameCap reads the stream described by frames, splitting it into
+// reads of each of the chunk sizes in turn, and checks that the connection
+// delivers exactly the leading messages whose size is at most limit.
+func checkFrameCap(t *testing.T, limit int, frames []capFrame, chunks []int) {
+	t.Helper()
+	var b strings.Builder
+	for _, f := range frames {
+		pad := f.size - len(f.sep) - len(capMessage(""))
+		if pad < 0 {
+			t.Fatalf("frame size %d is too small for a message after %q", f.size, f.sep)
 		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("queued Write() did not return after cancellation")
+		b.WriteString(f.sep)
+		b.WriteString(capMessage(strings.Repeat("x", pad)))
 	}
+	b.WriteString("\n")
+	stream := b.String()
 
-	frames := bufio.NewReader(peer)
-	line, err := frames.ReadString('\n')
-	if err != nil || !strings.Contains(line, `"first"`) {
-		t.Fatalf("peer read %q, %v; want the first message", line, err)
+	want, wantErr := 0, io.EOF
+	for want < len(frames) && frames[want].size <= limit {
+		want++
 	}
-	if err := <-first; err != nil {
-		t.Fatalf("first Write() = %v, want nil", err)
+	if want < len(frames) {
+		wantErr = errFrameTooLarge
 	}
-	peer.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
-	if line, err := frames.ReadString('\n'); !errors.Is(err, os.ErrDeadlineExceeded) {
-		t.Fatalf("peer read %q, %v after the canceled message; want nothing", line, err)
+	for _, chunk := range chunks {
+		r := &chunkReader{r: strings.NewReader(stream), n: chunk}
+		tr := newIOConnLimited(rwc{rc: io.NopCloser(r)}, limit)
+		got := 0
+		var err error
+		for {
+			if _, err = tr.Read(context.Background()); err != nil {
+				break
+			}
+			got++
+		}
+		tr.Close()
+		if got != want || !errors.Is(err, wantErr) {
+			t.Errorf("reading %d bytes at a time: got %d messages, then %v; want %d, then %v", chunk, got, err, want, wantErr)
+		}
 	}
 }
 
-// TestIOConnCanceledActiveWriteClosesConnection checks that canceling a write
-// blocked by a peer that never reads returns the cancellation and closes the
-// connection, since a partial frame may already be on the stream.
-func TestIOConnCanceledActiveWriteClosesConnection(t *testing.T) {
-	conn, observed, _ := observedPipe(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	done := make(chan error, 1)
-	go func() {
-		done <- conn.Write(ctx, &jsonrpc.Request{ID: jsonrpc2.Int64ID(1), Method: "blocked"})
-	}()
-	<-observed.writing
-	cancel()
-	select {
-	case err := <-done:
-		if !errors.Is(err, context.Canceled) {
-			t.Fatalf("Write() = %v, want context.Canceled", err)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("Write() did not return after cancellation")
+// chunkReader returns at most n bytes from each Read.
+type chunkReader struct {
+	r io.Reader
+	n int
+}
+
+func (r *chunkReader) Read(p []byte) (int, error) {
+	if len(p) > r.n {
+		p = p[:r.n]
 	}
-	if _, err := conn.Read(context.Background()); err == nil {
-		t.Fatal("Read() succeeded on a connection whose write was interrupted")
-	}
-	if err := conn.Write(context.Background(), &jsonrpc.Request{ID: jsonrpc2.Int64ID(2), Method: "after"}); err == nil {
-		t.Fatal("Write() succeeded on a connection whose write was interrupted")
-	}
+	return r.r.Read(p)
 }
 
 // TestIOConnDropResponse checks that ioConn discards the response to a call
@@ -1033,4 +1003,106 @@ func TestLoggingConnForwardsOptionalInterfaces(t *testing.T) {
 	if plain.propagateCancellation() {
 		t.Error("propagateCancellation() = true for a delegate without the interface, want false")
 	}
+}
+
+// TestIOConnCanceledQueuedWrite checks that a Write canceled while it waits for
+// another Write returns without sending its message, and that the connection
+// stays usable.
+func TestIOConnCanceledQueuedWrite(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		local, peer := net.Pipe()
+		conn := newIOConn(local)
+		defer conn.Close()
+		defer peer.Close()
+
+		write := func(ctx context.Context, method string) <-chan error {
+			errc := make(chan error, 1)
+			go func() { errc <- conn.Write(ctx, &jsonrpc.Request{Method: method}) }()
+			return errc
+		}
+
+		// The peer is not reading yet, so the first Write blocks in the pipe.
+		first := write(context.Background(), "first")
+		synctest.Wait()
+
+		ctx, cancel := context.WithCancel(context.Background())
+		canceled := write(ctx, "canceled")
+		synctest.Wait()
+		cancel()
+		if err := <-canceled; !errors.Is(err, context.Canceled) {
+			t.Fatalf("canceled Write() = %v, want %v", err, context.Canceled)
+		}
+
+		second := write(context.Background(), "second")
+		frames := bufio.NewScanner(peer)
+		for _, want := range []string{"first", "second"} {
+			if !frames.Scan() {
+				t.Fatalf("peer read no frame, want %q: %v", want, frames.Err())
+			}
+			msg, err := jsonrpc2.DecodeMessage(frames.Bytes())
+			if err != nil {
+				t.Fatalf("decoding %q: %v", frames.Bytes(), err)
+			}
+			if got := msg.(*jsonrpc.Request).Method; got != want {
+				t.Fatalf("peer read %q, want %q", got, want)
+			}
+		}
+		for _, errc := range []<-chan error{first, second} {
+			if err := <-errc; err != nil {
+				t.Errorf("Write() = %v, want nil", err)
+			}
+		}
+	})
+}
+
+// TestIOConnCanceledActiveWriteClosesConnection checks that canceling a write
+// blocked by a peer that never reads returns the cancellation and closes the
+// connection, since a partial frame may already be on the stream.
+func TestIOConnCanceledActiveWriteClosesConnection(t *testing.T) {
+	conn, observed, _ := observedPipe(t)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		done <- conn.Write(ctx, &jsonrpc.Request{ID: jsonrpc2.Int64ID(1), Method: "blocked"})
+	}()
+	<-observed.writing
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("Write() = %v, want context.Canceled", err)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("Write() did not return after cancellation")
+	}
+	if _, err := conn.Read(context.Background()); err == nil {
+		t.Fatal("Read() succeeded on a connection whose write was interrupted")
+	}
+	if err := conn.Write(context.Background(), &jsonrpc.Request{ID: jsonrpc2.Int64ID(2), Method: "after"}); err == nil {
+		t.Fatal("Write() succeeded on a connection whose write was interrupted")
+	}
+}
+
+// writeObserver reports when the connection starts writing to its peer.
+type writeObserver struct {
+	net.Conn
+	once    sync.Once
+	writing chan struct{}
+}
+
+func (w *writeObserver) Write(p []byte) (int, error) {
+	w.once.Do(func() { close(w.writing) })
+	return w.Conn.Write(p)
+}
+
+func observedPipe(t *testing.T) (*ioConn, *writeObserver, net.Conn) {
+	t.Helper()
+	local, peer := net.Pipe()
+	observed := &writeObserver{Conn: local, writing: make(chan struct{})}
+	conn := newIOConn(observed)
+	t.Cleanup(func() {
+		conn.Close()
+		peer.Close()
+	})
+	return conn, observed, peer
 }
