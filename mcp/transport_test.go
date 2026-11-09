@@ -73,6 +73,22 @@ func TestCallErrorsDoNotWrapConnectionClosed(t *testing.T) {
 	}
 }
 
+func TestCanceledCallOnClosedConnection(t *testing.T) {
+	conn, _ := newTestJSONRPCConnection(t, nil)
+	if err := conn.Close(); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	// Await may select either cancellation or the already-retired call.
+	for range 32 {
+		err := call(ctx, conn, "test", nil, nil)
+		if !errors.Is(err, context.Canceled) || errors.Is(err, ErrConnectionClosed) {
+			t.Fatalf("call() = %v, want context cancellation without ErrConnectionClosed", err)
+		}
+	}
+}
+
 func TestCallConnectionClosed(t *testing.T) {
 	for _, test := range connectionClosedTests() {
 		t.Run(test.name, func(t *testing.T) {

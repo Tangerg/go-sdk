@@ -344,11 +344,6 @@ func call(ctx context.Context, conn *jsonrpc2.Connection, method string, params 
 		// is nothing to cancel, and the spec permits notifications/cancelled
 		// only for requests believed to still be in progress.
 		return nil
-	case errors.Is(err, jsonrpc2.ErrConnClosing):
-		if cause := withoutClosingErrors(err); cause != nil {
-			return fmt.Errorf("%w: calling %q: %w", ErrConnectionClosed, method, cause)
-		}
-		return fmt.Errorf("%w: calling %q", ErrConnectionClosed, method)
 	case ctx.Err() != nil:
 		// The notifications/cancelled message is best-effort. Retire the call
 		// immediately (so an unresponsive peer cannot delay the eager
@@ -372,6 +367,11 @@ func call(ctx context.Context, conn *jsonrpc2.Connection, method string, params 
 			})
 		}()
 		return ctx.Err()
+	case errors.Is(err, jsonrpc2.ErrConnClosing):
+		if cause := withoutClosingErrors(err); cause != nil {
+			return fmt.Errorf("%w: calling %q: %w", ErrConnectionClosed, method, cause)
+		}
+		return fmt.Errorf("%w: calling %q", ErrConnectionClosed, method)
 	case err != nil:
 		return fmt.Errorf("calling %q: %w", method, err)
 	}

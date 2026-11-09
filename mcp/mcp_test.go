@@ -730,6 +730,8 @@ func TestCancellation(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		go cs.CallTool(ctx, &CallToolParams{Name: "slow"})
 		<-start
+		// Handler entry does not prove the original request write has returned.
+		synctest.Wait()
 		cancel()
 
 		// The client sends its context's error as the reason of its cancelled

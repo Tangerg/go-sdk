@@ -850,6 +850,8 @@ func TestRequestIDInReceivingMiddleware(t *testing.T) {
 		return record{}, false
 	}
 
+	mu.Lock()
+	defer mu.Unlock()
 	if r, ok := find(serverRecords, methodListTools); !ok {
 		t.Fatal("server middleware did not see tools/list")
 	} else if got, want := r.id.Raw(), any(callID); got != want {
