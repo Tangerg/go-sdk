@@ -45,6 +45,9 @@ var nomethodnotfoundcodeinerror = mcpgodebug.Value("nomethodnotfoundcodeinerror"
 // Some of the complexity of the Connection type is grown out of its usage in
 // gopls: it could probably be simplified based on our usage in MCP.
 type Connection struct {
+	maxIncomingRequests   int
+	cancelIncomingContext context.CancelCauseFunc
+
 	seq int64 // must only be accessed using atomic operations
 
 	stateMu sync.Mutex
@@ -129,6 +132,7 @@ func (c *Connection) updateInFlight(f func(*inFlightState)) {
 		} else {
 			// The readIncoming goroutine has exited, or never started to begin with.
 			// Since everything else is idle, we're completely done.
+			c.cancelIncomingContext(nil)
 			if c.onDone != nil {
 				c.onDone()
 			}
@@ -210,8 +214,19 @@ type ResponseDropper interface {
 	DropResponse(id ID)
 }
 
+const DefaultMaxIncomingRequests = 128
+
+var ErrIncomingCapacity = errors.New("jsonrpc2: incoming request capacity exceeded")
+
 // A ConnectionConfig configures a bidirectional jsonrpc2 connection.
 type ConnectionConfig struct {
+	// MaxIncomingRequests bounds queued and running requests, including
+	// notifications and calls whose response Writer.Write has not returned.
+	// Transport-owned buffers are outside this dispatcher budget. Zero uses
+	// DefaultMaxIncomingRequests. An excess request closes the connection so an unread
+	// reply cannot make overload admission block response or cancellation reads.
+	MaxIncomingRequests int
+
 	Reader          Reader                    // required
 	Writer          Writer                    // required
 	Closer          io.Closer                 // required
@@ -245,17 +260,26 @@ type ConnectionConfig struct {
 // NewConnection creates a new [Connection] object and starts processing
 // incoming messages.
 func NewConnection(ctx context.Context, cfg ConnectionConfig) *Connection {
+	if cfg.MaxIncomingRequests < 0 {
+		panic("jsonrpc2: negative incoming request capacity")
+	}
+	if cfg.MaxIncomingRequests == 0 {
+		cfg.MaxIncomingRequests = DefaultMaxIncomingRequests
+	}
 	if !cfg.PropagateCancellation {
 		ctx = notDone{ctx}
 	}
 
+	ctx, cancelIncoming := context.WithCancelCause(ctx)
 	c := &Connection{
-		state:                inFlightState{closer: cfg.Closer},
-		done:                 make(chan struct{}),
-		writer:               cfg.Writer,
-		onDone:               cfg.OnDone,
-		onInternalError:      cfg.OnInternalError,
-		onResponseWriteError: cfg.OnResponseWriteError,
+		maxIncomingRequests:   cfg.MaxIncomingRequests,
+		cancelIncomingContext: cancelIncoming,
+		state:                 inFlightState{closer: cfg.Closer},
+		done:                  make(chan struct{}),
+		writer:                cfg.Writer,
+		onDone:                cfg.OnDone,
+		onInternalError:       cfg.OnInternalError,
+		onResponseWriteError:  cfg.OnResponseWriteError,
 	}
 	c.handler = cfg.Bind(c)
 	c.start(ctx, cfg.Reader, cfg.Preempter)
@@ -559,6 +583,7 @@ func (c *Connection) Close() error {
 // to outgoing calls or feeding requests to the queue.
 func (c *Connection) readIncoming(ctx context.Context, reader Reader, preempter Preempter) {
 	var err error
+read:
 	for {
 		var msg Message
 		msg, err = reader.Read(ctx)
@@ -568,7 +593,9 @@ func (c *Connection) readIncoming(ctx context.Context, reader Reader, preempter 
 
 		switch msg := msg.(type) {
 		case *Request:
-			c.acceptRequest(ctx, msg, preempter)
+			if err = c.acceptRequest(ctx, msg, preempter); err != nil {
+				break read
+			}
 
 		case *Response:
 			c.updateInFlight(func(s *inFlightState) {
@@ -585,8 +612,8 @@ func (c *Connection) readIncoming(ctx context.Context, reader Reader, preempter 
 		}
 	}
 
+	var interrupted io.Closer
 	c.updateInFlight(func(s *inFlightState) {
-		s.reading = false
 		s.readErr = err
 
 		// Retire any outgoing requests that were still in flight: with the Reader no
@@ -596,33 +623,47 @@ func (c *Connection) readIncoming(ctx context.Context, reader Reader, preempter 
 		}
 		s.outgoingCalls = nil
 
-		// Cancel any incoming requests still in flight: with the reader gone we
-		// cannot receive cancellation notifications, and likely cannot write a
-		// response either, so parked handlers have nothing useful left to do.
-		// The cause is the read error, typically io.EOF from the peer
-		// disconnecting.
-		for _, r := range s.incomingByID {
-			r.cancel(err)
+		c.cancelIncomingContext(err)
+		if errors.Is(err, ErrIncomingCapacity) {
+			// A blocked response still owns its admission slot. Interrupt its
+			// transport before waiting for idle; another reply would also block.
+			interrupted, s.closer = s.closer, nil
 		}
 	})
+	if interrupted != nil {
+		closeErr := interrupted.Close()
+		c.updateInFlight(func(s *inFlightState) { s.closeErr = closeErr })
+	}
+	c.updateInFlight(func(s *inFlightState) { s.reading = false })
 }
 
 // acceptRequest either handles msg synchronously or enqueues it to be handled
 // asynchronously.
-func (c *Connection) acceptRequest(ctx context.Context, msg *Request, preempter Preempter) {
-	// In theory notifications cannot be cancelled, but we build them a cancel
-	// context anyway.
-	reqCtx, cancel := context.WithCancelCause(ctx)
-	req := &incomingRequest{
-		Request: msg,
-		ctx:     reqCtx,
-		cancel:  cancel,
+func (c *Connection) acceptRequest(ctx context.Context, msg *Request, preempter Preempter) error {
+	// Synchronous control notifications need no queue slot. Cancellation must
+	// still reach the original call when every request slot is occupied.
+	if !msg.IsCall() && preempter != nil {
+		result, err := preempter.Preempt(ctx, msg)
+		if !errors.Is(err, ErrNotHandled) {
+			if result != nil {
+				c.internalErrorf("Preempt returned a non-nil result for a %q notification", msg.Method)
+			}
+			return nil
+		}
+		preempter = nil
 	}
 
+	var req *incomingRequest
 	// If the request is a call, add it to the incoming map so it can be
 	// cancelled (or responded) by ID.
 	var err error
 	c.updateInFlight(func(s *inFlightState) {
+		if s.incoming >= c.maxIncomingRequests {
+			err = ErrIncomingCapacity
+			return
+		}
+		reqCtx, cancel := context.WithCancelCause(ctx)
+		req = &incomingRequest{Request: msg, ctx: reqCtx, cancel: cancel}
 		s.incoming++
 
 		if req.IsCall() {
@@ -644,17 +685,20 @@ func (c *Connection) acceptRequest(ctx context.Context, msg *Request, preempter 
 			err = s.shuttingDown(ErrConnClosing)
 		}
 	})
+	if req == nil {
+		return err
+	}
 	if err != nil {
-		c.processResult("acceptRequest", req, nil, err)
-		return
+		go c.processResult("acceptRequest", req, nil, err)
+		return nil
 	}
 
 	if preempter != nil {
 		result, err := preempter.Preempt(req.ctx, req.Request)
 
 		if !errors.Is(err, ErrNotHandled) {
-			c.processResult("Preempt", req, result, err)
-			return
+			go c.processResult("Preempt", req, result, err)
+			return nil
 		}
 	}
 
@@ -668,12 +712,6 @@ func (c *Connection) acceptRequest(ctx context.Context, msg *Request, preempter 
 			return
 		}
 
-		// We enqueue requests that have not been preempted to an unbounded slice.
-		// Unfortunately, we cannot in general limit the size of the handler
-		// queue: we have to read every response that comes in on the wire
-		// (because it may be responding to a request issued by, say, an
-		// asynchronous handler), and in order to get to that response we have
-		// to read all of the requests that came in ahead of it.
 		s.handlerQueue = append(s.handlerQueue, req)
 		if !s.handlerRunning {
 			// We start the handleAsync goroutine when it has work to do, and let it
@@ -693,8 +731,9 @@ func (c *Connection) acceptRequest(ctx context.Context, msg *Request, preempter 
 		}
 	})
 	if err != nil {
-		c.processResult("acceptRequest", req, nil, err)
+		go c.processResult("acceptRequest", req, nil, err)
 	}
+	return nil
 }
 
 // handleAsync invokes the handler on the requests in the handler queue
@@ -704,7 +743,9 @@ func (c *Connection) handleAsync() {
 		var req *incomingRequest
 		c.updateInFlight(func(s *inFlightState) {
 			if len(s.handlerQueue) > 0 {
-				req, s.handlerQueue = s.handlerQueue[0], s.handlerQueue[1:]
+				req = s.handlerQueue[0]
+				s.handlerQueue[0] = nil
+				s.handlerQueue = s.handlerQueue[1:]
 			} else {
 				s.handlerRunning = false
 			}
@@ -826,9 +867,7 @@ func (c *Connection) write(ctx context.Context, msg Message) error {
 		c.updateInFlight(func(s *inFlightState) {
 			if s.writeErr == nil {
 				s.writeErr = err
-				for _, r := range s.incomingByID {
-					r.cancel(fmt.Errorf("%w: %v", ErrConnClosing, err))
-				}
+				c.cancelIncomingContext(fmt.Errorf("%w: %v", ErrConnClosing, err))
 			}
 		})
 	}

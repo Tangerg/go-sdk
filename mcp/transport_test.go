@@ -369,11 +369,10 @@ func TestIOConnRead(t *testing.T) {
 				if requested == "" {
 					requested = tt.protocolVersion
 				}
-				tr.serverSessionUpdated(ServerSessionState{
-					InitializeParams: &InitializeParams{
-						ProtocolVersion: requested,
-					},
-					NegotiatedProtocolVersion: tt.protocolVersion,
+				session := &ServerSession{mcpConn: tr}
+				session.updateState(func(state *ServerSessionState) {
+					state.InitializeParams = &InitializeParams{ProtocolVersion: requested}
+					state.NegotiatedProtocolVersion = tt.protocolVersion
 				})
 			}
 			_, err := tr.Read(context.Background())
@@ -732,7 +731,7 @@ func TestIOConnDropResponse(t *testing.T) {
 				wc: nopCloserWriter{&out},
 			})
 			t.Cleanup(func() { tr.Close() })
-			tr.serverSessionUpdated(ServerSessionState{NegotiatedProtocolVersion: test.version})
+			tr.ProtocolVersionNegotiated(test.version)
 
 			if test.drop {
 				tr.DropResponse(jsonrpc2.Int64ID(1))
@@ -970,12 +969,14 @@ func TestLoggingConnDropResponse(t *testing.T) {
 // interface, recording the calls it receives.
 type optionalConn struct {
 	Connection
-	clientState *clientSessionState
-	serverState *ServerSessionState
+	clientState     *clientSessionState
+	serverState     *ServerSessionState
+	protocolVersion string
 }
 
 func (c *optionalConn) clientSessionUpdated(s clientSessionState) { c.clientState = &s }
 func (c *optionalConn) serverSessionUpdated(s ServerSessionState) { c.serverState = &s }
+func (c *optionalConn) ProtocolVersionNegotiated(version string)  { c.protocolVersion = version }
 func (c *optionalConn) propagateCancellation() bool               { return true }
 
 // TestLoggingConnForwardsOptionalInterfaces verifies that loggingConn forwards
@@ -993,6 +994,10 @@ func TestLoggingConnForwardsOptionalInterfaces(t *testing.T) {
 	if delegate.serverState == nil || delegate.serverState.NegotiatedProtocolVersion != protocolVersion20251125 {
 		t.Errorf("serverSessionUpdated was not forwarded: got %+v", delegate.serverState)
 	}
+	lc.ProtocolVersionNegotiated(protocolVersion20260728)
+	if delegate.protocolVersion != protocolVersion20260728 {
+		t.Fatalf("negotiated protocol version was not forwarded: %s", delegate.protocolVersion)
+	}
 	if !lc.propagateCancellation() {
 		t.Error("propagateCancellation() = false, want the delegate's true")
 	}
@@ -1000,6 +1005,7 @@ func TestLoggingConnForwardsOptionalInterfaces(t *testing.T) {
 	plain := &loggingConn{delegate: struct{ Connection }{}, w: io.Discard}
 	plain.clientSessionUpdated(clientSessionState{})
 	plain.serverSessionUpdated(ServerSessionState{})
+	plain.ProtocolVersionNegotiated(protocolVersion20260728)
 	if plain.propagateCancellation() {
 		t.Error("propagateCancellation() = true for a delegate without the interface, want false")
 	}

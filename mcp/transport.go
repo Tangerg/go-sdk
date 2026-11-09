@@ -40,6 +40,12 @@ var blockingcancelnotify = mcpgodebug.Value("blockingcancelnotify")
 // is closed or in the process of closing.
 var ErrConnectionClosed = errors.New("connection closed")
 
+// ErrIncomingCapacity means a session exceeded its retained incoming request
+// budget and its transport was closed. Already dispatched effects remain unknown.
+var ErrIncomingCapacity = jsonrpc2.ErrIncomingCapacity
+
+const DefaultMaxIncomingRequests = jsonrpc2.DefaultMaxIncomingRequests
+
 // ErrSessionMissing is returned when the session is known to not be present on
 // the server.
 var ErrSessionMissing = errors.New("session not found")
@@ -91,6 +97,26 @@ type Connection interface {
 
 	// TODO(#148): remove SessionID from this interface.
 	SessionID() string
+}
+
+// ProtocolVersionReceiver is an optional Connection capability for transports
+// whose framing or cancellation behavior depends on the negotiated version.
+// Only the session owner publishes this projection; transports do not negotiate
+// or infer it. Wrapping connections must forward this capability when present.
+// This synchronous transport projection runs in session order and may hold the
+// session's state lock. Implementations must return promptly without reentering
+// the session or dispatching application work.
+type ProtocolVersionReceiver interface {
+	ProtocolVersionNegotiated(string)
+}
+
+func notifyProtocolVersion(connection Connection, version string) {
+	if version == "" {
+		return
+	}
+	if receiver, ok := connection.(ProtocolVersionReceiver); ok {
+		receiver.ProtocolVersionNegotiated(version)
+	}
 }
 
 // A ClientConnection is a [Connection] that is specific to the MCP client.
@@ -197,8 +223,11 @@ type handler interface {
 
 // connect wires a transport to a binder. logger must be non-nil; it receives
 // jsonrpc2 internal errors that would otherwise be dropped (see #218).
-func connect[H handler, State any](ctx context.Context, t Transport, b binder[H, State], s State, onClose func(), logger *slog.Logger) (H, error) {
+func connect[H handler, State any](ctx context.Context, t Transport, b binder[H, State], s State, onClose func(), logger *slog.Logger, maxIncomingRequests int) (H, error) {
 	var zero H
+	if maxIncomingRequests < 0 {
+		return zero, fmt.Errorf("invalid incoming request capacity %d", maxIncomingRequests)
+	}
 	mcpConn, err := t.Connect(ctx)
 	if err != nil {
 		return zero, err
@@ -222,11 +251,12 @@ func connect[H handler, State any](ctx context.Context, t Transport, b binder[H,
 		propagateCancellation = cp.propagateCancellation()
 	}
 	_ = jsonrpc2.NewConnection(ctx, jsonrpc2.ConnectionConfig{
-		Reader:    reader,
-		Writer:    writer,
-		Closer:    mcpConn,
-		Bind:      bind,
-		Preempter: &preempter,
+		MaxIncomingRequests: maxIncomingRequests,
+		Reader:              reader,
+		Writer:              writer,
+		Closer:              mcpConn,
+		Bind:                bind,
+		Preempter:           &preempter,
 		OnDone: func() {
 			b.disconnect(h)
 		},
@@ -263,7 +293,7 @@ type canceller struct {
 
 // Preempt implements [jsonrpc2.Preempter].
 func (c *canceller) Preempt(ctx context.Context, req *jsonrpc.Request) (result any, err error) {
-	if req.Method == notificationCancelled {
+	if !req.IsCall() && req.Method == notificationCancelled {
 		var params CancelledParams
 		// UseNumber keeps a numeric requestId exact, as in jsonrpc2.DecodeMessage.
 		if err := internaljson.UnmarshalUseNumber(req.Params, &params); err != nil {
@@ -279,6 +309,7 @@ func (c *canceller) Preempt(ctx context.Context, req *jsonrpc.Request) (result a
 		// dropped here.
 		c.logger.Debug("request cancelled by the peer", "id", id.Raw(), "reason", params.Reason)
 		c.conn.CancelFromPeer(id, &peerCancelledError{reason: params.Reason})
+		return nil, nil
 	}
 	return nil, jsonrpc2.ErrNotHandled
 }
@@ -482,7 +513,12 @@ var (
 	_ serverConnection         = (*loggingConn)(nil)
 	_ cancellationPropagator   = (*loggingConn)(nil)
 	_ jsonrpc2.ResponseDropper = (*loggingConn)(nil)
+	_ ProtocolVersionReceiver  = (*loggingConn)(nil)
 )
+
+func (s *loggingConn) ProtocolVersionNegotiated(version string) {
+	notifyProtocolVersion(s.delegate, version)
+}
 
 func (s *loggingConn) clientSessionUpdated(state clientSessionState) {
 	if c, ok := s.delegate.(clientConnection); ok {
@@ -490,8 +526,6 @@ func (s *loggingConn) clientSessionUpdated(state clientSessionState) {
 	}
 }
 
-// serverSessionUpdated forwards to the delegate, whose behavior may depend on
-// the negotiated protocol version (see [ioConn.DropResponse]).
 func (s *loggingConn) serverSessionUpdated(state ServerSessionState) {
 	if c, ok := s.delegate.(serverConnection); ok {
 		c.serverSessionUpdated(state)
@@ -684,16 +718,9 @@ func (r *frameLimitReader) beginFrame(offset int64) { r.start = offset }
 
 func (c *ioConn) SessionID() string { return "" }
 
-func (c *ioConn) serverSessionUpdated(state ServerSessionState) {
-	protocolVersion := state.NegotiatedProtocolVersion
-	if protocolVersion == "" {
-		// 2025-03-26 is used, because it's the last spec version
-		// where specifying the protocol version in the HTTP header
-		// was not required.
-		protocolVersion = protocolVersion20250326
-	}
+func (c *ioConn) ProtocolVersionNegotiated(version string) {
 	c.sessionMu.Lock()
-	c.protocolVersion = protocolVersion
+	c.protocolVersion = version
 	c.sessionMu.Unlock()
 }
 

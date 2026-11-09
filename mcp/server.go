@@ -91,6 +91,15 @@ type Server struct {
 
 // ServerOptions is used to configure behavior of the server.
 type ServerOptions struct {
+	// MaxIncomingRequests bounds calls and notifications admitted to the
+	// JSON-RPC dispatcher. Each slot lasts until its handler and response
+	// Writer.Write return. Transport buffering before Read or after Write
+	// returns, including legacy batch buffers, needs its own transport limits.
+	// Zero uses DefaultMaxIncomingRequests; a negative value makes Connect fail.
+	// An excess request closes the session with ErrIncomingCapacity. Responses
+	// and cancellation notifications still progress while the budget is full.
+	MaxIncomingRequests int
+
 	// Optional instructions for connected clients.
 	Instructions string
 	// Logger may be set to a non-nil value to enable logging of server activity.
@@ -1533,6 +1542,7 @@ func (s *Server) bind(mcpConn Connection, conn *jsonrpc2.Connection, state *Serv
 	ss := &ServerSession{conn: conn, mcpConn: mcpConn, server: s, onClose: onClose}
 	if state != nil {
 		ss.state = *state
+		notifyProtocolVersion(mcpConn, ss.state.NegotiatedProtocolVersion)
 	}
 	s.mu.Lock()
 	s.sessions = append(s.sessions, ss)
@@ -1584,7 +1594,7 @@ func (s *Server) Connect(ctx context.Context, t Transport, opts *ServerSessionOp
 	}
 
 	logSessionLifecycle(s.opts.Logger, "server connecting")
-	ss, err := connect(ctx, t, s, state, onClose, s.opts.Logger)
+	ss, err := connect(ctx, t, s, state, onClose, s.opts.Logger, s.opts.MaxIncomingRequests)
 	if err != nil {
 		s.opts.Logger.Error("server connect error", "error", err)
 		return nil, err
@@ -1713,12 +1723,18 @@ type ServerSession struct {
 }
 
 func (ss *ServerSession) updateState(mut func(*ServerSessionState)) {
-	ss.mu.Lock()
-	mut(&ss.state)
-	copy := ss.state
-	ss.mu.Unlock()
+	state := func() ServerSessionState {
+		ss.mu.Lock()
+		defer ss.mu.Unlock()
+		previousVersion := ss.state.NegotiatedProtocolVersion
+		mut(&ss.state)
+		if ss.state.NegotiatedProtocolVersion != previousVersion {
+			notifyProtocolVersion(ss.mcpConn, ss.state.NegotiatedProtocolVersion)
+		}
+		return ss.state
+	}()
 	if c, ok := ss.mcpConn.(serverConnection); ok {
-		c.serverSessionUpdated(copy)
+		c.serverSessionUpdated(state)
 	}
 }
 

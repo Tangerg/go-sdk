@@ -85,6 +85,15 @@ func NewClient(impl *Implementation, options *ClientOptions) *Client {
 
 // ClientOptions configures the behavior of the client.
 type ClientOptions struct {
+	// MaxIncomingRequests bounds calls and notifications admitted to the
+	// JSON-RPC dispatcher. Each slot lasts until its handler and response
+	// Writer.Write return. Transport buffering before Read or after Write
+	// returns, including legacy batch buffers, needs its own transport limits.
+	// Zero uses DefaultMaxIncomingRequests; a negative value makes Connect fail.
+	// An excess request closes the session with ErrIncomingCapacity. Responses
+	// and cancellation notifications still progress while the budget is full.
+	MaxIncomingRequests int
+
 	// Logger may be set to a non-nil value to enable logging of client activity.
 	Logger *slog.Logger
 	// CreateMessageHandler handles incoming requests for sampling/createMessage.
@@ -307,7 +316,7 @@ func (c *Client) capabilities(protocolVersion string) *ClientCapabilities {
 // server, calls or notifications will return an error wrapping
 // [ErrConnectionClosed].
 func (c *Client) Connect(ctx context.Context, t Transport, opts *ClientSessionOptions) (cs *ClientSession, err error) {
-	cs, err = connect(ctx, t, c, (*clientSessionState)(nil), nil, c.opts.Logger)
+	cs, err = connect(ctx, t, c, (*clientSessionState)(nil), nil, c.opts.Logger, c.opts.MaxIncomingRequests)
 	if err != nil {
 		return nil, err
 	}
@@ -328,10 +337,7 @@ func (c *Client) Connect(ctx context.Context, t Transport, opts *ClientSessionOp
 		for range 2 {
 			discRes, err := c.discover(discoverCtx, cs)
 			if err == nil {
-				cs.state.InitializeResult = discRes
-				if hc, ok := cs.mcpConn.(clientConnection); ok {
-					hc.clientSessionUpdated(cs.state)
-				}
+				cs.initialize(discRes)
 				subscribeParams := &SubscriptionsListenParams{
 					Notifications: &NotificationSubscriptions{},
 				}
@@ -399,10 +405,7 @@ func (c *Client) Connect(ctx context.Context, t Transport, opts *ClientSessionOp
 		_ = cs.Close()
 		return nil, unsupportedProtocolVersionError{res.ProtocolVersion}
 	}
-	cs.state.InitializeResult = res
-	if hc, ok := cs.mcpConn.(clientConnection); ok {
-		hc.clientSessionUpdated(cs.state)
-	}
+	cs.initialize(res)
 	req2 := &initializedClientRequest{Session: cs, Params: &InitializedParams{}}
 	if err := handleNotify(ctx, notificationInitialized, req2); err != nil {
 		_ = cs.Close()
@@ -524,6 +527,14 @@ type resourceSub struct {
 
 type clientSessionState struct {
 	InitializeResult *InitializeResult
+}
+
+func (cs *ClientSession) initialize(result *InitializeResult) {
+	cs.state.InitializeResult = result
+	notifyProtocolVersion(cs.mcpConn, result.ProtocolVersion)
+	if connection, ok := cs.mcpConn.(clientConnection); ok {
+		connection.clientSessionUpdated(cs.state)
+	}
 }
 
 func (cs *ClientSession) InitializeResult() *InitializeResult { return cs.state.InitializeResult }
